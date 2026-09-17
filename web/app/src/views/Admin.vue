@@ -55,7 +55,6 @@
                   @change="updateRole(user, $event.target.value)"
                   class="role-select"
                   :class="user.role.toLowerCase()"
-                  :disabled="isSelf(user)"
                 >
                   <option value="STUDENT">Student</option>
                   <option value="DISCIPLINE_ADMIN">Discipline Admin</option>
@@ -71,7 +70,6 @@
                 <button 
                   @click="deleteUser(user)" 
                   class="btn-icon btn-danger"
-                  :disabled="isSelf(user)"
                   title="Delete User"
                 >
                   🗑️

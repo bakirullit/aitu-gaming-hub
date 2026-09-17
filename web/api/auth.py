@@ -1,4 +1,5 @@
 import secrets
+import asyncio
 from datetime import datetime, timedelta, timezone
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,6 +17,16 @@ from web.api.dependencies import get_db_session
 from core.lifespan import runtime
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"])
+
+async def _delete_otp_message_delayed(chat_id: int, message_id: int, key: str):
+    """Deletes the OTP message after 180 seconds if it hasn't been verified."""
+    await asyncio.sleep(180)
+    if await runtime.redis.exists(key):
+        try:
+            await runtime.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except Exception:
+            pass
+        await runtime.redis.delete(key)
 
 @auth_router.post("/otp/request")
 async def request_otp(
@@ -52,22 +63,28 @@ async def request_otp(
     # Generate 6-digit secure code
     code = "".join(secrets.choice("0123456789") for _ in range(6))
     
-    # Save to Redis
-    otp_key = f"auth:otp:{user.telegram_id}"
-    await runtime.redis.set(otp_key, code, ex=180)  # 3 minutes expiry
-    await runtime.redis.set(cooldown_key, "1", ex=60) # 1 minute cooldown
-
     # Dispatch via bot
     try:
-        await runtime.bot.send_message(
+        msg = await runtime.bot.send_message(
             chat_id=user.telegram_id,
-            text=f"🔐 <b>Ваш код авторизации в Админ Панель:</b>\n\n<code>{code}</code>\n\nНикому не сообщайте этот код. Он действителен 3 минуты.",
+            text=f"🔐 <b>Ваш код авторизации в Админ Панель:</b>\n\n<code>{code}</code>\n\nНикому не сообщайте этот код. Он автоматически удалится через 3 минуты.",
             parse_mode="HTML"
         )
     except Exception as e:
         # Prevent lockout if bot cannot send message
         await runtime.redis.delete(cooldown_key)
         raise HTTPException(status_code=500, detail=f"Failed to send Telegram message: {str(e)}")
+
+    # Save to Redis
+    otp_key = f"auth:otp:{user.telegram_id}"
+    msg_key = f"auth:otp:msg:{user.telegram_id}"
+    
+    await runtime.redis.set(otp_key, code, ex=180)  # 3 minutes expiry
+    await runtime.redis.set(msg_key, msg.message_id, ex=180)
+    await runtime.redis.set(cooldown_key, "1", ex=60) # 1 minute cooldown
+
+    # Background task to clean up message if not verified
+    asyncio.create_task(_delete_otp_message_delayed(user.telegram_id, msg.message_id, msg_key))
 
     return {"status": "ok", "message": "Code sent to Telegram", "telegram_id": user.telegram_id}
 
@@ -79,13 +96,23 @@ async def verify_otp(
 ):
     """Verifies OTP from Redis and issues a JWT token."""
     otp_key = f"auth:otp:{payload.telegram_id}"
+    msg_key = f"auth:otp:msg:{payload.telegram_id}"
+    
     saved_code = await runtime.redis.get(otp_key)
     
     if not saved_code or saved_code != payload.code:
         raise HTTPException(status_code=400, detail="Invalid or expired code")
         
-    # Immediately delete to prevent replay
-    await runtime.redis.delete(otp_key)
+    # Valid code: delete message immediately
+    msg_id = await runtime.redis.get(msg_key)
+    if msg_id:
+        try:
+            await runtime.bot.delete_message(chat_id=payload.telegram_id, message_id=int(msg_id))
+        except Exception:
+            pass
+            
+    # Clean up keys to prevent replay
+    await runtime.redis.delete(otp_key, msg_key)
     
     stmt = select(User).where(User.telegram_id == payload.telegram_id)
     result = await session.execute(stmt)
