@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # Helpdesk Settings
     HELPDESK_ADMIN_CHAT_ID: int | None = None
 
+    # Web Admin Auth
+    JWT_SECRET: str = Field(default="dev_secret_key_change_in_production")
+    JWT_EXPIRE_HOURS: int = 12
+
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT == "production"

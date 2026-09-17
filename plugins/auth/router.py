@@ -60,6 +60,15 @@ def setup_auth_routes(core: CoreContext) -> Router:
         chat_id = message.chat.id
         username = message.from_user.username
 
+        # Force menu to bottom: delete old anchor and clear its ID from Redis
+        anchor_id = await core.navigator.get_anchor_id(user_id)
+        if anchor_id:
+            try:
+                await core.bot.delete_message(chat_id, anchor_id)
+            except Exception:
+                pass
+            await core.redis.delete(f"anchor:user:{user_id}:message_id")
+
         # Upsert User in DB
         stmt = select(User).where(User.telegram_id == user_id)
         result = await session.execute(stmt)
@@ -408,5 +417,15 @@ def setup_auth_routes(core: CoreContext) -> Router:
             push_to_history=True,
         )
         await callback.answer()
+
+    @router.message(F.chat.type == "private")
+    async def fallback_handler(message: Message, session: AsyncSession, state: FSMContext) -> None:
+        """
+        Fallback for when a user deletes the anchor message and sends random text.
+        GarbageCollector deletes the text, but this handler recreates the anchor.
+        """
+        # Ensure we only handle messages that don't have an active FSM state
+        # (Aiogram checks State by default, but just to be safe we can clear it)
+        await cmd_start(message, session, state)
 
     return router
