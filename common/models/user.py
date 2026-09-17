@@ -10,9 +10,12 @@ class User(Base, TimestampMixin):
 
     telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    full_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
-    student_id: Mapped[str | None] = mapped_column(String(32), unique=True, index=True, nullable=True)
+    first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     barcode: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
+    phone_number: Mapped[str | None] = mapped_column(String(32), unique=True, index=True, nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
+    academic_group: Mapped[str | None] = mapped_column(String(32), nullable=True)
     role: Mapped[UserRole] = mapped_column(
         SQLEnum(UserRole, name="user_role_enum"),
         default=UserRole.STUDENT,
@@ -21,4 +24,4 @@ class User(Base, TimestampMixin):
     is_verified: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     def __repr__(self) -> str:
-        return f"<User telegram_id={self.telegram_id} student_id={self.student_id} role={self.role}>"
+        return f"<User telegram_id={self.telegram_id} barcode={self.barcode} role={self.role}>"

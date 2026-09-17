@@ -13,11 +13,14 @@ class DomainEvent:
 
 @dataclass(frozen=True)
 class UserVerifiedEvent(DomainEvent):
-    """Fired when an AITU student passes verification with student ID & barcode."""
+    """Fired when an AITU student passes verification with barcode."""
     telegram_id: int = 0
-    student_id: str = ""
     barcode: str = ""
-    full_name: str = ""
+    first_name: str = ""
+    last_name: str = ""
+    phone_number: str = ""
+    email: str = ""
+    academic_group: str = ""
     role: UserRole = UserRole.STUDENT
 
 

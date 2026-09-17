@@ -16,15 +16,18 @@ async def test_event_bus_dispatches_to_matching_subscribers() -> None:
 
     event = UserVerifiedEvent(
         telegram_id=12345678,
-        student_id="210103001",
-        barcode="123456789012",
-        full_name="Alikhan Nurzhan",
+        first_name="Alikhan",
+        last_name="Nurzhan",
+        barcode="123456",
+        phone_number="+77771234567",
+        email="alikhan@gmail.com",
+        academic_group="CS-2424",
         role=UserRole.STUDENT,
     )
     await bus.publish(event)
 
     assert len(received_events) == 1
-    assert received_events[0].student_id == "210103001"
+    assert received_events[0].first_name == "Alikhan"
     assert received_events[0].telegram_id == 12345678
 
 
@@ -38,22 +41,25 @@ async def test_event_bus_circuit_breaker_isolates_failures() -> None:
         raise RuntimeError("External network failed in subscriber!")
 
     async def healthy_subscriber(event: UserVerifiedEvent) -> None:
-        executed_healthy.append(event.student_id)
+        executed_healthy.append(event.barcode)
 
     bus.subscribe(UserVerifiedEvent, failing_subscriber)
     bus.subscribe(UserVerifiedEvent, healthy_subscriber)
 
     event = UserVerifiedEvent(
         telegram_id=99999,
-        student_id="220107055",
-        barcode="987654321098",
-        full_name="Dias Beket",
+        first_name="Dias",
+        last_name="Beket",
+        barcode="654321",
+        phone_number="+77777654321",
+        email="dias@gmail.com",
+        academic_group="SE-2331",
     )
     # Should not raise exception
     await bus.publish(event)
 
     assert len(executed_healthy) == 1
-    assert executed_healthy[0] == "220107055"
+    assert executed_healthy[0] == "654321"
 
 
 @pytest.mark.asyncio
