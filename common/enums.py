@@ -14,3 +14,23 @@ class TicketStatus(StrEnum):
     IN_PROGRESS = "IN_PROGRESS"
     RESOLVED = "RESOLVED"
     CLOSED = "CLOSED"
+
+
+class DisciplineType(StrEnum):
+    """Esports disciplines recognized in AITU Gaming Hub."""
+    CS2 = "CS2"
+    DOTA2 = "DOTA2"
+    VALORANT = "VALORANT"
+    FIFA = "FIFA"
+    PUBG = "PUBG"
+    MLBB = "MLBB"
+    OTHER = "OTHER"
+
+
+class TournamentStatus(StrEnum):
+    """Lifecycle statuses for tournament booking slots."""
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+

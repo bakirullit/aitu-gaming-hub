@@ -13,6 +13,9 @@ def get_welcome_screen(is_verified: bool = False, full_name: str = "") -> Screen
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
+                    InlineKeyboardButton(text="🏆 Турниры и киберспорт", callback_data="nav:tournaments"),
+                ],
+                [
                     InlineKeyboardButton(text="⛏️ Minecraft Сервер", callback_data="nav:minecraft"),
                 ],
                 [

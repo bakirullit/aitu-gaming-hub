@@ -35,8 +35,9 @@ class Settings(BaseSettings):
     MINECRAFT_RCON_PASSWORD: str = ""
     MINECRAFT_RCON_TIMEOUT: float = 3.0
 
-    # Helpdesk Settings
+    # Helpdesk & Tournament Settings
     HELPDESK_ADMIN_CHAT_ID: int | None = None
+    TOURNAMENT_ADMIN_CHAT_ID: int | None = None
 
     # Web Admin Auth
     JWT_SECRET: str = Field(default="dev_secret_key_change_in_production")

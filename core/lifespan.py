@@ -25,6 +25,7 @@ from core.middlewares.db_session import DBSessionMiddleware
 from plugins.auth.plugin import AuthPlugin
 from plugins.minecraft.plugin import MinecraftPlugin
 from plugins.helpdesk.plugin import HelpdeskPlugin
+from plugins.tournaments.plugin import TournamentsPlugin
 
 logger = logging.getLogger("core.lifespan")
 
@@ -89,8 +90,10 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
     plugin_manager.register(AuthPlugin())
     plugin_manager.register(MinecraftPlugin())
     plugin_manager.register(HelpdeskPlugin())
+    plugin_manager.register(TournamentsPlugin())
 
     await plugin_manager.setup_all(core)
+
 
     # Store in runtime container
     runtime.bot = bot
