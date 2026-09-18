@@ -1,9 +1,15 @@
 <template>
   <div class="admin-container">
     <div class="glass-header">
-      <div class="logo">
-        <span class="icon">🕹️</span>
-        <h1>AITU Gaming Hub <span class="badge">Admin</span></h1>
+      <div class="header-left">
+        <div class="logo">
+          <span class="icon">🕹️</span>
+          <h1>AITU Gaming Hub <span class="badge">Admin</span></h1>
+        </div>
+        <nav class="nav-tabs">
+          <router-link to="/admin" class="tab-link active">👥 Members</router-link>
+          <router-link to="/admin/disciplines" class="tab-link">🎮 Disciplines</router-link>
+        </nav>
       </div>
       <div class="user-menu">
         <span class="username">{{ currentUser?.first_name || 'Admin' }}</span>
@@ -252,7 +258,39 @@ onMounted(() => {
   text-transform: uppercase;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.tab-link {
+  color: #a0a0b0;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.tab-link:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-link.active {
+  color: #fff;
+  background: rgba(108, 92, 231, 0.25);
+  border: 1px solid rgba(108, 92, 231, 0.5);
+}
+
 .user-menu {
+
   display: flex;
   align-items: center;
   gap: 1rem;

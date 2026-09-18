@@ -13,6 +13,9 @@ def get_welcome_screen(is_verified: bool = False, full_name: str = "") -> Screen
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
+                    InlineKeyboardButton(text="🎮 Каталог дисциплин", callback_data="nav:disciplines"),
+                ],
+                [
                     InlineKeyboardButton(text="🏆 Турниры и киберспорт", callback_data="nav:tournaments"),
                 ],
                 [
@@ -37,6 +40,9 @@ def get_welcome_screen(is_verified: bool = False, full_name: str = "") -> Screen
             inline_keyboard=[
                 [
                     InlineKeyboardButton(text="🎓 Начать регистрацию", callback_data="auth:start"),
+                ],
+                [
+                    InlineKeyboardButton(text="🎮 Каталог дисциплин", callback_data="nav:disciplines"),
                 ],
                 [
                     InlineKeyboardButton(text="🎫 Помощь / Саппорт", callback_data="nav:helpdesk"),

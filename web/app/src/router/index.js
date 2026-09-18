@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import Admin from '../views/Admin.vue'
+import Disciplines from '../views/Disciplines.vue'
 import Login from '../views/Login.vue'
 
 const routes = [
@@ -11,7 +12,13 @@ const routes = [
     component: Admin,
     meta: { requiresAuth: true }
   },
+  { 
+    path: '/admin/disciplines', 
+    component: Disciplines,
+    meta: { requiresAuth: true }
+  },
 ]
+
 
 const router = createRouter({
   history: createWebHistory(),

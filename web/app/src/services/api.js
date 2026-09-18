@@ -31,3 +31,14 @@ api.interceptors.response.use(
 )
 
 export default api
+
+export const disciplineApi = {
+  getAll: () => api.get('/admin/disciplines'),
+  create: (data) => api.post('/admin/disciplines', data),
+  update: (slug, data) => api.patch(`/admin/disciplines/${slug}`, data),
+  delete: (slug) => api.delete(`/admin/disciplines/${slug}`),
+}
+
+export const userApi = {
+  getUsers: (params) => api.get('/admin/users', { params }),
+}

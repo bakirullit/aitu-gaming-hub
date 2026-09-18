@@ -11,6 +11,9 @@ from common.database.base import Base
 from common.models.user import User
 from common.models.minecraft import MinecraftWhitelist
 from common.models.ticket import HelpdeskTicket
+from common.models.tournament import DisciplineAdmin, TournamentBooking
+from common.models.discipline import Discipline
+
 
 config = context.config
 

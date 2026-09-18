@@ -26,6 +26,8 @@ from plugins.auth.plugin import AuthPlugin
 from plugins.minecraft.plugin import MinecraftPlugin
 from plugins.helpdesk.plugin import HelpdeskPlugin
 from plugins.tournaments.plugin import TournamentsPlugin
+from plugins.disciplines.plugin import DisciplinesPlugin
+
 
 logger = logging.getLogger("core.lifespan")
 
@@ -91,8 +93,10 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
     plugin_manager.register(MinecraftPlugin())
     plugin_manager.register(HelpdeskPlugin())
     plugin_manager.register(TournamentsPlugin())
+    plugin_manager.register(DisciplinesPlugin())
 
     await plugin_manager.setup_all(core)
+
 
 
     # Store in runtime container

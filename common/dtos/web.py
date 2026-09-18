@@ -39,3 +39,49 @@ class PaginatedUsersResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class CuratorSummary(BaseModel):
+    telegram_id: int
+    username: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    role: UserRole
+
+    class Config:
+        from_attributes = True
+
+
+class DisciplineResponse(BaseModel):
+    slug: str
+    name: str
+    tier: str
+    description: str
+    chat_url: str
+    admin_id: int | None = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    admin: CuratorSummary | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class DisciplineCreateRequest(BaseModel):
+    slug: str = Field(..., min_length=2, max_length=32, description="URL-friendly identifier e.g. cs2")
+    name: str = Field(..., min_length=2, max_length=64)
+    tier: str = Field(default="medium", description="major or medium")
+    description: str = Field(..., min_length=5, max_length=512)
+    chat_url: str = Field(..., min_length=5, max_length=255)
+    admin_id: int | None = None
+
+
+class DisciplineUpdateRequest(BaseModel):
+    name: str | None = Field(None, min_length=2, max_length=64)
+    tier: str | None = None
+    description: str | None = Field(None, min_length=5, max_length=512)
+    chat_url: str | None = Field(None, min_length=5, max_length=255)
+    admin_id: int | None = None
+    is_active: bool | None = None
+
