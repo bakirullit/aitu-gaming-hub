@@ -84,16 +84,30 @@ async def update_role(
     await session.commit()
     await session.refresh(user)
 
-    # Cache Invalidation: clear Telegram anchor message ID and FSM states
-    # This forces the navigator to drop a new menu next time the user interacts.
-    anchor_key = f"anchor:user:{telegram_id}:message_id"
+    # Invalidate navigation stack and interaction locks, preserving persistent anchor message ID
     stack_key = f"anchor:user:{telegram_id}:stack"
+    stack_key_alt = f"anchor:{telegram_id}:stack"
     lock_key = f"lock:user:{telegram_id}"
-    
-    # aiogram state keys usually depend on the storage. 
-    # To be safe, we just clear navigation state and force a /start behavior
-    await runtime.redis.delete(anchor_key, stack_key, lock_key)
-    
+    await runtime.redis.delete(stack_key, stack_key_alt, lock_key)
+
+    # Immediately re-render the user's anchor message in-place to reflect updated menu options
+    if runtime.core and runtime.core.navigator:
+        anchor_id = await runtime.core.navigator.get_anchor_id(telegram_id)
+        if anchor_id:
+            try:
+                from plugins.auth.screens import get_welcome_screen
+                full_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or (user.username and f"@{user.username}") or "Студент"
+                welcome_screen = get_welcome_screen(is_verified=user.is_verified, full_name=full_name)
+                await runtime.core.navigator.render(
+                    user_id=telegram_id,
+                    chat_id=telegram_id,
+                    screen=welcome_screen,
+                    screen_id="home",
+                    push_to_history=False,
+                )
+            except Exception:
+                pass
+
     return UserResponse.model_validate(user)
 
 @users_router.delete("/{telegram_id}")

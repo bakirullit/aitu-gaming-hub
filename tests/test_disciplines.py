@@ -77,12 +77,13 @@ async def test_assign_admin_promotion_and_atomic_sync(in_memory_db):
         assert da_record is not None
         assert da_record.discipline == DisciplineType.CS2
 
-        # Check Redis invalidation called with navigation keys
+        # Check Redis invalidation called with navigation keys (preserving anchor message ID)
         mock_redis.delete.assert_awaited()
         deleted_keys = mock_redis.delete.call_args[0]
-        assert "anchor:5001:message_id" in deleted_keys
         assert "anchor:5001:stack" in deleted_keys
         assert "lock:user:5001" in deleted_keys
+        assert "anchor:5001:message_id" not in deleted_keys
+
 
 
 @pytest.mark.asyncio

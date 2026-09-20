@@ -18,20 +18,42 @@ class DisciplineService:
 
     @staticmethod
     async def _invalidate_user_cache(user_id: int, redis: Redis | None) -> None:
-        """Clear navigator persistent anchor, stack history, and interaction lock in Redis."""
+        """Clear navigator stack history and interaction lock in Redis without wiping anchor message ID."""
         if redis is None:
             return
         try:
             await redis.delete(
-                f"anchor:{user_id}:message_id",
-                f"anchor:user:{user_id}:message_id",
                 f"anchor:{user_id}:stack",
                 f"anchor:user:{user_id}:stack",
                 f"lock:user:{user_id}",
             )
-            logger.debug(f"Invalidated Redis navigation cache for user={user_id}")
+            logger.debug(f"Invalidated Redis navigation stack for user={user_id}")
         except Exception as exc:
             logger.warning(f"Error invalidating Redis cache for user {user_id}: {exc}")
+
+        # Re-render active anchor message in-place if runtime core is available
+        try:
+            from core.lifespan import runtime
+            if runtime.core and runtime.core.navigator:
+                anchor_id = await runtime.core.navigator.get_anchor_id(user_id)
+                if anchor_id:
+                    from plugins.auth.screens import get_welcome_screen
+                    from common.database.session import db_manager
+                    async with db_manager.session_factory() as s:
+                        u = await s.scalar(select(User).where(User.telegram_id == user_id))
+                        if u:
+                            full_name = f"{u.first_name or ''} {u.last_name or ''}".strip() or (u.username and f"@{u.username}") or "Студент"
+                            screen = get_welcome_screen(is_verified=u.is_verified, full_name=full_name)
+                            await runtime.core.navigator.render(
+                                user_id=user_id,
+                                chat_id=user_id,
+                                screen=screen,
+                                screen_id="home",
+                                push_to_history=False,
+                            )
+        except Exception as exc:
+            logger.debug(f"Silent catch re-rendering anchor on role change: {exc}")
+
 
     @classmethod
     async def assign_admin(

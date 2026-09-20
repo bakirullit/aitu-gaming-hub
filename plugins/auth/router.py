@@ -3,7 +3,7 @@ import logging
 from aiogram import Router, F
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.state import State, StatesGroup, default_state
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -256,7 +256,7 @@ def setup_auth_routes(core: CoreContext) -> Router:
             error_screen = screen.__class__(
                 text=(
                     f"❌ <b>Некорректный формат телефона!</b>\n\n"
-                    f"Пожалуйста, введите корректный номер (например: +77772179050):"
+                    f"Пожалуйста, введите корректный номер телефона:"
                 ),
                 reply_markup=screen.reply_markup,
             )
@@ -316,7 +316,7 @@ def setup_auth_routes(core: CoreContext) -> Router:
             error_screen = screen.__class__(
                 text=(
                     f"❌ <b>Некорректный формат группы!</b>\n\n"
-                    f"Убедитесь, что формат XX-YYZZ (например: CS-2424, SE-2331).\n"
+                    f"Убедитесь, что формат XX-YYZZ (2-4 заглавные буквы, дефис и 4 цифры).\n"
                     "Пожалуйста, повторите ввод:"
                 ),
                 reply_markup=screen.reply_markup,
@@ -418,14 +418,16 @@ def setup_auth_routes(core: CoreContext) -> Router:
         )
         await callback.answer()
 
-    @router.message(F.chat.type == "private")
+    @router.message(F.chat.type == "private", default_state)
     async def fallback_handler(message: Message, session: AsyncSession, state: FSMContext) -> None:
         """
-        Fallback for when a user deletes the anchor message and sends random text.
+        Fallback for when a user deletes the anchor message and sends random text outside of any flow.
         GarbageCollector deletes the text, but this handler recreates the anchor.
         """
-        # Ensure we only handle messages that don't have an active FSM state
-        # (Aiogram checks State by default, but just to be safe we can clear it)
+        current_state = await state.get_state()
+        if current_state is not None:
+            return
         await cmd_start(message, session, state)
 
     return router
+

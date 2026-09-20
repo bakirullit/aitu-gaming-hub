@@ -64,8 +64,9 @@ async def test_zero_input_context_lookup(in_memory_db):
             telegram_id=2002,
             username="fifa_king",
             first_name="Bakdaulet",
-            last_name="Argyngazy",
+            last_name="Armanov",
             email="241738@astanait.edu.kz",
+
             role=UserRole.DISCIPLINE_ADMIN,
             is_verified=True,
         )
@@ -227,3 +228,38 @@ async def test_admin_approval_card_building(in_memory_db):
         buttons = [btn for row in kb.inline_keyboard for btn in row]
         assert any("Подтвердить слот" in b.text and "tb_adm:approve:42" == b.callback_data for b in buttons)
         assert any("Отклонить" in b.text and "tb_adm:reject:42" == b.callback_data for b in buttons)
+
+
+def test_student_registration_prompts_have_no_personal_examples():
+    """Verify that all personal data examples (Bakdaulet, Argyngazy, 241738, CS-2424) are removed."""
+    from plugins.auth.screens import (
+        get_first_name_prompt_screen,
+        get_last_name_prompt_screen,
+        get_barcode_prompt_screen,
+        get_phone_prompt_screen,
+        get_email_prompt_screen,
+        get_group_prompt_screen,
+    )
+
+    screens = [
+        get_first_name_prompt_screen(),
+        get_last_name_prompt_screen("Ivan"),
+        get_barcode_prompt_screen("Ivan", "Ivanov"),
+        get_phone_prompt_screen("123456"),
+        get_email_prompt_screen("+77001234567"),
+        get_group_prompt_screen("test@astanait.edu.kz"),
+    ]
+
+    forbidden_examples = [
+        "Argyngazy",
+        "CS-2424",
+        "Bakdaulet",
+        "241738",
+        "+77772179050",
+        "bakirullet@gmail.com",
+    ]
+
+    for s in screens:
+        for ex in forbidden_examples:
+            assert ex not in s.text, f"Forbidden example '{ex}' found in screen text: {s.text}"
+

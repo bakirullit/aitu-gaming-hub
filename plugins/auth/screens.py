@@ -57,7 +57,7 @@ def get_first_name_prompt_screen() -> Screen:
     """Step 1: First Name"""
     text = (
         "📝 <b>Шаг 1 из 6: Имя</b>\n\n"
-        "Пожалуйста, отправьте ваше <b>Имя</b> в этот чат (например: <code>Bakdaulet</code>).\n\n"
+        "Пожалуйста, отправьте ваше <b>Имя</b> в этот чат.\n\n"
         "<i>💡 Ваше сообщение будет автоматически удалено, а экран обновится на месте.</i>"
     )
     keyboard = InlineKeyboardMarkup(
@@ -73,7 +73,7 @@ def get_last_name_prompt_screen(first_name: str) -> Screen:
     text = (
         f"📝 <b>Шаг 2 из 6: Фамилия</b>\n\n"
         f"Имя: <b>{first_name}</b> ✅\n\n"
-        f"Теперь отправьте вашу <b>Фамилию</b> (например: <code>Argyngazy</code>).\n"
+        f"Теперь отправьте вашу <b>Фамилию</b>.\n"
     )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -88,7 +88,7 @@ def get_barcode_prompt_screen(first_name: str, last_name: str) -> Screen:
     text = (
         f"💳 <b>Шаг 3 из 6: Штрих-код студенческого билета</b>\n\n"
         f"ФИО: <b>{first_name} {last_name}</b> ✅\n\n"
-        f"Введите 6-значный <b>Bar-Code</b> с вашей ID-карты (например: <code>241738</code>).\n"
+        f"Введите 6-значный <b>Bar-Code</b> с вашей ID-карты.\n"
     )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -103,7 +103,7 @@ def get_phone_prompt_screen(barcode: str) -> Screen:
     text = (
         f"📱 <b>Шаг 4 из 6: Номер телефона</b>\n\n"
         f"Bar-Code: <code>{barcode}</code> ✅\n\n"
-        f"Введите ваш <b>Номер телефона</b> (например: <code>+77772179050</code>).\n"
+        f"Введите ваш <b>Номер телефона</b>.\n"
     )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -118,7 +118,7 @@ def get_email_prompt_screen(phone: str) -> Screen:
     text = (
         f"📧 <b>Шаг 5 из 6: Email почта</b>\n\n"
         f"Телефон: <code>{phone}</code> ✅\n\n"
-        f"Введите ваш <b>Email адрес</b> (например: <code>bakirullet@gmail.com</code>).\n"
+        f"Введите ваш <b>Email адрес</b>.\n"
     )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -133,7 +133,7 @@ def get_group_prompt_screen(email: str) -> Screen:
     text = (
         f"🎓 <b>Шаг 6 из 6: Академическая группа</b>\n\n"
         f"Email: <code>{email}</code> ✅\n\n"
-        f"Введите вашу <b>Группу</b> в формате XX-YYZZ (например: <code>CS-2424</code>).\n"
+        f"Введите вашу <b>Академическую группу</b>.\n"
     )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -141,6 +141,7 @@ def get_group_prompt_screen(email: str) -> Screen:
         ]
     )
     return Screen(text=text, reply_markup=keyboard)
+
 
 
 def get_verification_success_screen(full_name: str, barcode: str, group: str) -> Screen:
