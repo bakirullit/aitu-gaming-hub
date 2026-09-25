@@ -1,41 +1,50 @@
 <template>
   <div class="login-container">
-    <div class="glass-panel login-box">
-      <h2>AITU Gaming Hub Admin</h2>
-      
-      <div v-if="!otpSent" class="step-1">
-        <p>Authenticate via Telegram</p>
-        <div class="input-group">
+    <div class="login-box">
+      <div class="login-header">
+        <router-link to="/tournaments" class="back-link">← Tournaments</router-link>
+        <div class="brand">
+          <span class="logo-mark">AITU</span>
+          <h2>Admin Login</h2>
+        </div>
+        <p class="subtitle">Authenticate with your university Telegram account.</p>
+      </div>
+
+      <div v-if="!otpSent" class="step">
+        <div class="input-wrap">
+          <label>Telegram Identifier</label>
           <input 
             v-model="identifier" 
             type="text" 
             placeholder="Telegram ID or @username" 
             @keyup.enter="requestOtp"
+            class="minimal-input"
           />
         </div>
-        <button @click="requestOtp" :disabled="loading" class="btn-primary">
+        <button @click="requestOtp" :disabled="loading" class="btn-submit">
           {{ loading ? 'Sending...' : 'Request Code' }}
         </button>
         <p v-if="errorMsg" class="error-msg">{{ errorMsg }}</p>
       </div>
 
-      <div v-else class="step-2">
-        <p>Enter the 6-digit code sent to your Telegram.</p>
-        <div class="input-group">
+      <div v-else class="step">
+        <div class="input-wrap">
+          <label>6-Digit Verification Code</label>
           <input 
             v-model="code" 
             type="text" 
             placeholder="000000" 
             maxlength="6"
             @keyup.enter="verifyOtp"
+            class="minimal-input code-input"
           />
         </div>
-        <button @click="verifyOtp" :disabled="loading || code.length !== 6" class="btn-primary">
-          {{ loading ? 'Verifying...' : 'Login' }}
+        <button @click="verifyOtp" :disabled="loading || code.length !== 6" class="btn-submit">
+          {{ loading ? 'Verifying...' : 'Authenticate' }}
         </button>
         
         <p class="cooldown-text" v-if="cooldown > 0">Resend available in {{ cooldown }}s</p>
-        <button v-else @click="requestOtp" class="btn-text">Resend Code</button>
+        <button v-else @click="requestOtp" class="btn-resend">Resend Code</button>
         
         <p v-if="errorMsg" class="error-msg">{{ errorMsg }}</p>
       </div>
@@ -98,11 +107,9 @@ const verifyOtp = async () => {
       code: code.value 
     })
     
-    // Save tokens and user data
     localStorage.setItem('access_token', res.data.access_token)
     localStorage.setItem('user', JSON.stringify(res.data.user))
     
-    // Redirect to Admin panel
     router.push('/admin')
   } catch (err) {
     errorMsg.value = err.response?.data?.detail || 'Invalid or expired code'
@@ -118,90 +125,146 @@ const verifyOtp = async () => {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: radial-gradient(circle at top left, #1a1a2e, #16213e, #0f3460);
+  background-color: var(--bg-color, #090a0f);
+  padding: 1.5rem;
 }
 
 .login-box {
   width: 100%;
-  max-width: 400px;
-  padding: 3rem 2rem;
-  text-align: center;
+  max-width: 380px;
+  background: var(--surface-bg, #0f1117);
+  border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-lg, 14px);
+  padding: 2.25rem;
+}
+
+.login-header {
+  margin-bottom: 2rem;
+}
+
+.back-link {
+  display: inline-block;
+  font-size: 0.82rem;
+  color: var(--text-muted, #64748b);
+  margin-bottom: 1.5rem;
+  transition: color 0.15s;
+}
+
+.back-link:hover {
+  color: #fff;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.logo-mark {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
+.brand h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.subtitle {
+  font-size: 0.88rem;
+  color: var(--text-secondary, #94a3b8);
+  line-height: 1.4;
+}
+
+.step {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
-h2 {
-  margin-bottom: 0.5rem;
-  font-size: 1.75rem;
-  color: #fff;
+.input-wrap label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-secondary, #94a3b8);
+  margin-bottom: 0.4rem;
 }
 
-p {
-  color: #a0a0b0;
-  margin-bottom: 1.5rem;
-}
-
-.input-group input {
+.minimal-input {
   width: 100%;
-  padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-sm, 6px);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.95rem;
   color: #fff;
-  font-size: 1.1rem;
-  transition: all 0.2s;
-  box-sizing: border-box;
+  transition: border-color 0.15s;
 }
 
-.input-group input:focus {
-  outline: none;
-  border-color: #6c5ce7;
-  box-shadow: 0 0 10px rgba(108, 92, 231, 0.4);
+.minimal-input:focus {
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
-.btn-primary {
+.code-input {
+  letter-spacing: 6px;
+  font-size: 1.25rem;
+  text-align: center;
+  font-family: monospace;
+}
+
+.btn-submit {
   width: 100%;
-  padding: 1rem;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
-  color: white;
+  padding: 0.7rem;
+  border-radius: var(--radius-sm, 6px);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 0.9rem;
   font-weight: 600;
-  font-size: 1.1rem;
-  border: none;
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-  margin-top: 1rem;
+  transition: all 0.15s;
+  margin-top: 0.5rem;
 }
 
-.btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(108, 92, 231, 0.4);
+.btn-submit:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
 }
 
-.btn-primary:disabled {
-  opacity: 0.6;
+.btn-submit:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-.btn-text {
-  background: none;
-  border: none;
-  color: #a29bfe;
-  cursor: pointer;
-  margin-top: 1rem;
-  text-decoration: underline;
+.btn-resend {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 0.25rem;
+  transition: color 0.15s;
 }
 
-.error-msg {
-  color: #ff7675;
-  margin-top: 1rem;
-  font-size: 0.9rem;
+.btn-resend:hover {
+  color: #fff;
 }
 
 .cooldown-text {
-  color: #a0a0b0;
-  margin-top: 1rem;
-  font-size: 0.9rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.error-msg {
+  color: #f87171;
+  font-size: 0.85rem;
+  text-align: center;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
 }
 </style>

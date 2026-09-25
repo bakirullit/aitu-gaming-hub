@@ -1,39 +1,46 @@
 <template>
   <div class="admin-container">
-    <div class="glass-header">
-      <div class="header-left">
-        <div class="logo">
-          <span class="icon">🕹️</span>
-          <h1>AITU Gaming Hub <span class="badge">Admin</span></h1>
+    <!-- Minimalist Header -->
+    <header class="header">
+      <div class="header-inner">
+        <div class="header-left">
+          <router-link to="/admin" class="logo">
+            <span class="logo-mark">AITU</span>
+            <span class="logo-text">Gaming Hub</span>
+            <span class="logo-pill">Admin</span>
+          </router-link>
+          <nav class="nav">
+            <router-link to="/tournaments" class="nav-item">Tournaments</router-link>
+            <router-link to="/admin" class="nav-item active">Members</router-link>
+            <router-link to="/admin/disciplines" class="nav-item">Disciplines</router-link>
+          </nav>
         </div>
-        <nav class="nav-tabs">
-          <router-link to="/tournaments" class="tab-link">🏆 Tournaments</router-link>
-          <router-link to="/admin" class="tab-link active">👥 Members</router-link>
-          <router-link to="/admin/disciplines" class="tab-link">🎮 Disciplines</router-link>
-        </nav>
+        <div class="header-right">
+          <span class="admin-user">{{ currentUser?.first_name || 'Admin' }}</span>
+          <button @click="logout" class="btn-ghost text-danger">Logout</button>
+        </div>
       </div>
-      <div class="user-menu">
-        <span class="username">{{ currentUser?.first_name || 'Admin' }}</span>
-        <button @click="logout" class="btn-logout">Logout</button>
-      </div>
-    </div>
+    </header>
 
-    <div class="glass-panel main-content">
+    <main class="page-body">
       <div class="toolbar">
-        <h2>Members Management</h2>
-        <div class="search-box">
-          <span class="search-icon">🔍</span>
+        <div class="toolbar-title">
+          <h2>Members</h2>
+          <span class="count-badge">{{ total }} registered</span>
+        </div>
+        <div class="search-wrap">
           <input 
             v-model="searchQuery" 
             @input="debounceSearch"
             type="text" 
-            placeholder="Search by Barcode, Name, Group..." 
+            placeholder="Search barcode, name, group..." 
+            class="search-input"
           />
         </div>
       </div>
 
-      <div class="table-wrapper">
-        <table v-if="!loading || users.length > 0">
+      <div class="table-container">
+        <table v-if="!loading || users.length > 0" class="minimal-table">
           <thead>
             <tr>
               <th>Barcode</th>
@@ -42,17 +49,17 @@
               <th>Contact</th>
               <th>Role</th>
               <th>Status</th>
-              <th>Actions</th>
+              <th class="text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="user in users" :key="user.telegram_id">
-              <td class="mono">{{ user.barcode || 'N/A' }}</td>
-              <td>{{ user.first_name }} {{ user.last_name }}</td>
-              <td>{{ user.academic_group || 'N/A' }}</td>
+              <td class="mono">{{ user.barcode || '—' }}</td>
+              <td>{{ user.first_name }} {{ user.last_name || '' }}</td>
+              <td>{{ user.academic_group || '—' }}</td>
               <td>
                 <div class="contact-col">
-                  <span>{{ user.phone_number }}</span>
+                  <span>{{ user.phone_number || '—' }}</span>
                   <span class="sub-text">{{ user.username ? '@' + user.username : '' }}</span>
                 </div>
               </td>
@@ -61,7 +68,6 @@
                   v-model="user.role" 
                   @change="updateRole(user, $event.target.value)"
                   class="role-select"
-                  :class="user.role.toLowerCase()"
                 >
                   <option value="STUDENT">Student</option>
                   <option value="DISCIPLINE_ADMIN">Discipline Admin</option>
@@ -69,17 +75,18 @@
                 </select>
               </td>
               <td>
-                <span class="status-badge" :class="user.is_verified ? 'verified' : 'pending'">
-                  {{ user.is_verified ? 'Verified' : 'Pending' }}
-                </span>
+                <div class="status-dot-wrap">
+                  <span class="status-dot" :class="user.is_verified ? 'verified' : 'pending'"></span>
+                  <span class="status-text">{{ user.is_verified ? 'Verified' : 'Pending' }}</span>
+                </div>
               </td>
-              <td class="actions">
+              <td class="text-right">
                 <button 
                   @click="deleteUser(user)" 
-                  class="btn-icon btn-danger"
+                  class="btn-delete"
                   title="Delete User"
                 >
-                  🗑️
+                  Delete
                 </button>
               </td>
             </tr>
@@ -90,23 +97,23 @@
         </table>
         
         <div v-if="loading" class="loading-overlay">
-          <div class="spinner"></div>
+          <div class="minimal-spinner"></div>
         </div>
       </div>
 
       <div class="pagination">
         <span class="page-info">Showing {{ users.length }} of {{ total }} members</span>
         <div class="page-controls">
-          <button @click="prevPage" :disabled="offset === 0">◀ Prev</button>
-          <button @click="nextPage" :disabled="offset + limit >= total">Next ▶</button>
+          <button @click="prevPage" :disabled="offset === 0" class="btn-page">◀ Prev</button>
+          <button @click="nextPage" :disabled="offset + limit >= total" class="btn-page">Next ▶</button>
         </div>
       </div>
-    </div>
+    </main>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../services/api'
 
@@ -120,10 +127,6 @@ const loading = ref(false)
 const currentUser = ref(null)
 
 let searchTimeout = null
-
-const isSelf = (user) => {
-  return currentUser.value && currentUser.value.telegram_id === user.telegram_id
-}
 
 const loadCurrentUser = () => {
   try {
@@ -157,14 +160,7 @@ const debounceSearch = () => {
   searchTimeout = setTimeout(() => {
     offset.value = 0
     fetchUsers()
-  }, 400)
-}
-
-const prevPage = () => {
-  if (offset.value >= limit.value) {
-    offset.value -= limit.value
-    fetchUsers()
-  }
+  }, 300)
 }
 
 const nextPage = () => {
@@ -174,22 +170,26 @@ const nextPage = () => {
   }
 }
 
+const prevPage = () => {
+  if (offset.value >= limit.value) {
+    offset.value -= limit.value
+    fetchUsers()
+  }
+}
+
 const updateRole = async (user, newRole) => {
-  const originalRole = user.role
   try {
     await api.patch(`/admin/users/${user.telegram_id}/role`, { role: newRole })
-    // Assume success, state is already updated via v-model
   } catch (err) {
     alert(err.response?.data?.detail || "Failed to update role")
-    user.role = originalRole // revert on failure
+    fetchUsers()
   }
 }
 
 const deleteUser = async (user) => {
-  if (!confirm(`Are you sure you want to delete ${user.first_name || 'this user'}? This will also remove their Minecraft whitelist and Helpdesk tickets.`)) {
+  if (!confirm(`Are you sure you want to delete ${user.first_name} ${user.last_name || ''}?`)) {
     return
   }
-  
   try {
     await api.delete(`/admin/users/${user.telegram_id}`)
     fetchUsers()
@@ -213,200 +213,203 @@ onMounted(() => {
 <style scoped>
 .admin-container {
   min-height: 100vh;
-  background: radial-gradient(circle at top right, #16213e, #0f3460, #1a1a2e);
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
+  background-color: var(--bg-color, #090a0f);
+  color: var(--text-primary, #f8fafc);
+  padding-bottom: 5rem;
 }
 
-.glass-header {
+/* Header */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(9, 10, 15, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--surface-border, rgba(255, 255, 255, 0.07));
+}
+
+.header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.85rem 1.5rem;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  padding: 1rem 2rem;
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.logo .icon {
-  font-size: 2rem;
-}
-
-.logo h1 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #fff;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.badge {
-  font-size: 0.7rem;
-  background: #e84393;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  text-transform: uppercase;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 2.5rem;
+  gap: 2rem;
 }
 
-.nav-tabs {
+.logo {
   display: flex;
-  gap: 0.75rem;
-}
-
-.tab-link {
-  color: #a0a0b0;
+  align-items: center;
+  gap: 0.5rem;
   text-decoration: none;
+  color: inherit;
+}
+
+.logo-mark {
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
+.logo-text {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.logo-pill {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+  margin-left: 0.25rem;
+}
+
+.nav {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.nav-item {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.88rem;
   font-weight: 500;
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  transition: all 0.2s;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-sm, 6px);
+  transition: all 0.15s ease;
 }
 
-.tab-link:hover {
+.nav-item:hover {
   color: #fff;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
 }
 
-.tab-link.active {
+.nav-item.active {
   color: #fff;
-  background: rgba(108, 92, 231, 0.25);
-  border: 1px solid rgba(108, 92, 231, 0.5);
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.user-menu {
-
+.header-right {
   display: flex;
   align-items: center;
   gap: 1rem;
 }
 
-.username {
-  color: #a29bfe;
-  font-weight: 500;
+.admin-user {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
 }
 
-.btn-logout {
-  background: rgba(255, 118, 117, 0.2);
-  color: #ff7675;
-  border: 1px solid rgba(255, 118, 117, 0.5);
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
+.btn-ghost {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s;
 }
 
-.btn-logout:hover {
-  background: #ff7675;
+.btn-ghost:hover {
   color: #fff;
 }
 
-.main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 2rem;
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(16px);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+.text-danger { color: #f87171 !important; }
+
+/* Body */
+.page-body {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
 }
 
 .toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   margin-bottom: 1.5rem;
 }
 
-.toolbar h2 {
-  color: #fff;
-  font-size: 1.25rem;
+.toolbar-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
 }
 
-.search-box {
-  position: relative;
-  width: 300px;
+.toolbar-title h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
 }
 
-.search-icon {
-  position: absolute;
-  left: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #a0a0b0;
+.count-badge {
+  font-size: 0.82rem;
+  color: var(--text-muted);
 }
 
-.search-box input {
+.search-wrap {
+  width: 280px;
+}
+
+.search-input {
   width: 100%;
-  padding: 0.75rem 1rem 0.75rem 2.5rem;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
   color: #fff;
-  box-sizing: border-box;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
 }
 
-.search-box input:focus {
-  outline: none;
-  border-color: #6c5ce7;
-  background: rgba(255, 255, 255, 0.1);
+.search-input:focus {
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
-.table-wrapper {
-  flex: 1;
+/* Table */
+.table-container {
   position: relative;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
   overflow-x: auto;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-table {
+.minimal-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
 }
 
-th {
-  background: rgba(255, 255, 255, 0.05);
-  color: #a0a0b0;
-  padding: 1rem;
+.minimal-table th {
+  padding: 0.85rem 1.25rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--surface-border);
 }
 
-td {
-  padding: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  color: #ecf0f1;
-  vertical-align: middle;
+.minimal-table td {
+  padding: 0.85rem 1.25rem;
+  font-size: 0.88rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-tr:hover td {
+.minimal-table tbody tr:hover {
   background: rgba(255, 255, 255, 0.02);
 }
 
 .mono {
   font-family: monospace;
-  color: #74b9ff;
+  color: #cbd5e1;
 }
 
 .contact-col {
@@ -415,131 +418,116 @@ tr:hover td {
 }
 
 .sub-text {
-  font-size: 0.8rem;
-  color: #a0a0b0;
-}
-
-.status-badge {
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.status-badge.verified {
-  background: rgba(0, 184, 148, 0.2);
-  color: #00b894;
-}
-
-.status-badge.pending {
-  background: rgba(253, 203, 110, 0.2);
-  color: #fdcb6e;
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
 .role-select {
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(255, 255, 255, 0.04);
   color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 0.4rem;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  outline: none;
+  border: 1px solid var(--surface-border);
+  padding: 0.35rem 0.55rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
 }
 
-.role-select.student { color: #a29bfe; }
-.role-select.discipline_admin { color: #00cec9; }
-.role-select.head_admin { color: #fd79a8; font-weight: bold; }
-
-.role-select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.actions {
+.status-dot-wrap {
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-.btn-icon {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.1rem;
-  opacity: 0.7;
-  transition: opacity 0.2s;
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
 }
 
-.btn-icon:hover:not(:disabled) {
-  opacity: 1;
+.status-dot.verified { background: var(--success, #10b981); }
+.status-dot.pending { background: var(--warning, #f59e0b); }
+
+.status-text {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
 }
 
-.btn-icon:disabled {
-  cursor: not-allowed;
-  opacity: 0.3;
+.text-right { text-align: right; }
+
+.btn-delete {
+  font-size: 0.8rem;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
+}
+
+.btn-delete:hover {
+  background: rgba(239, 68, 68, 0.2);
 }
 
 .empty-state {
   text-align: center;
   padding: 3rem;
-  color: #a0a0b0;
+  color: var(--text-muted);
 }
 
 .loading-overlay {
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(2px);
+  inset: 0;
+  background: rgba(9, 10, 15, 0.6);
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
 }
 
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(108, 92, 231, 0.3);
+.minimal-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #fff;
   border-radius: 50%;
-  border-top-color: #6c5ce7;
-  animation: spin 1s ease-in-out infinite;
+  animation: spin 0.7s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
+/* Pagination */
 .pagination {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 1.5rem;
+  margin-top: 1.25rem;
 }
 
 .page-info {
-  color: #a0a0b0;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
 }
 
 .page-controls {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
-.page-controls button {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+.btn-page {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
+}
+
+.btn-page:hover:not(:disabled) {
   color: #fff;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
-.page-controls button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.page-controls button:disabled {
-  opacity: 0.5;
+.btn-page:disabled {
+  opacity: 0.35;
   cursor: not-allowed;
 }
 </style>

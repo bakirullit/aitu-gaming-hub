@@ -1,77 +1,81 @@
 <template>
-  <div class="admin-container">
-    <div class="glass-header">
-      <div class="header-left">
-        <div class="logo">
-          <span class="icon">🕹️</span>
-          <h1>AITU Gaming Hub <span class="badge">Admin</span></h1>
+  <div class="disciplines-page">
+    <!-- Minimalist Header -->
+    <header class="header">
+      <div class="header-inner">
+        <div class="header-left">
+          <router-link to="/admin" class="logo">
+            <span class="logo-mark">AITU</span>
+            <span class="logo-text">Gaming Hub</span>
+            <span class="logo-pill">Disciplines</span>
+          </router-link>
+          <nav class="nav">
+            <router-link to="/tournaments" class="nav-item">Tournaments</router-link>
+            <router-link to="/admin" class="nav-item">Members</router-link>
+            <router-link to="/admin/disciplines" class="nav-item active">Disciplines</router-link>
+          </nav>
         </div>
-        <nav class="nav-tabs">
-          <router-link to="/tournaments" class="tab-link">🏆 Tournaments</router-link>
-          <router-link to="/admin" class="tab-link">👥 Members</router-link>
-          <router-link to="/admin/disciplines" class="tab-link active">🎮 Disciplines</router-link>
-        </nav>
+        <div class="header-right">
+          <span class="admin-user">{{ currentUser?.first_name || 'Admin' }}</span>
+          <button @click="logout" class="btn-ghost text-danger">Logout</button>
+        </div>
       </div>
-      <div class="user-menu">
-        <span class="username">{{ currentUser?.first_name || 'Admin' }}</span>
-        <button @click="logout" class="btn-logout">Logout</button>
-      </div>
-    </div>
+    </header>
 
     <!-- Toast Notification Banner -->
     <transition name="fade">
       <div v-if="toast.message" class="toast-banner" :class="toast.type">
         <span>{{ toast.message }}</span>
-        <button @click="toast.message = ''" class="toast-close">×</button>
+        <button @click="toast.message = ''" class="toast-close">✕</button>
       </div>
     </transition>
 
-    <div class="glass-panel main-content">
+    <main class="page-body">
       <div class="toolbar">
         <div class="toolbar-title">
-          <h2>Disciplines Management</h2>
-          <span class="counter-badge">{{ disciplines.length }} Directions</span>
+          <h2>Disciplines</h2>
+          <span class="count-badge">{{ disciplines.length }} active</span>
         </div>
         <div class="toolbar-actions">
-          <div class="search-box">
-            <span class="search-icon">🔍</span>
+          <div class="search-wrap">
             <input 
               v-model="searchQuery" 
               type="text" 
               placeholder="Filter disciplines..." 
+              class="search-input"
             />
           </div>
-          <button @click="openCreateModal" class="btn-primary">
-            ➕ New Discipline
+          <button @click="openCreateModal" class="btn-primary-action">
+            + New Discipline
           </button>
         </div>
       </div>
 
-      <div class="table-wrapper">
-        <table v-if="!loading || disciplines.length > 0">
+      <div class="table-container">
+        <table v-if="!loading || disciplines.length > 0" class="minimal-table">
           <thead>
             <tr>
               <th>Slug</th>
               <th>Discipline</th>
               <th>Tier</th>
-              <th>Curator (Admin)</th>
-              <th>Community Chat</th>
+              <th>Curator</th>
+              <th>Chat</th>
               <th>Status</th>
-              <th>Actions</th>
+              <th class="text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="item in filteredDisciplines" :key="item.slug">
-              <td class="mono font-bold">{{ item.slug }}</td>
+              <td class="mono">{{ item.slug }}</td>
               <td>
                 <div class="name-cell">
                   <strong>{{ item.name }}</strong>
-                  <span class="sub-text">{{ truncate(item.description, 45) }}</span>
+                  <span class="sub-text">{{ truncate(item.description, 50) }}</span>
                 </div>
               </td>
               <td>
-                <span class="tier-badge" :class="item.tier">
-                  {{ item.tier === 'major' ? '🔥 Major' : '⚡ Medium' }}
+                <span class="tier-pill" :class="item.tier">
+                  {{ item.tier === 'major' ? 'Major' : 'Medium' }}
                 </span>
               </td>
               <td>
@@ -87,30 +91,33 @@
               </td>
               <td>
                 <a :href="item.chat_url" target="_blank" rel="noopener" class="chat-link">
-                  💬 Open Chat ↗
+                  Open Chat ↗
                 </a>
               </td>
               <td>
-                <span class="status-badge" :class="item.is_active ? 'verified' : 'pending'">
-                  {{ item.is_active ? 'Active' : 'Inactive' }}
-                </span>
+                <div class="status-dot-wrap">
+                  <span class="status-dot" :class="item.is_active ? 'active' : 'inactive'"></span>
+                  <span class="status-text">{{ item.is_active ? 'Active' : 'Inactive' }}</span>
+                </div>
               </td>
-              <td class="actions">
-                <button 
-                  @click="openEditModal(item)" 
-                  class="btn-icon btn-edit"
-                  title="Edit Discipline & Curator"
-                >
-                  ✏️
-                </button>
-                <button 
-                  @click="deactivateDiscipline(item)" 
-                  class="btn-icon btn-danger"
-                  title="Deactivate Discipline"
-                  :disabled="!item.is_active"
-                >
-                  🛑
-                </button>
+              <td class="text-right">
+                <div class="actions">
+                  <button 
+                    @click="openEditModal(item)" 
+                    class="btn-subtle small"
+                    title="Edit"
+                  >
+                    Edit
+                  </button>
+                  <button 
+                    @click="deactivateDiscipline(item)" 
+                    class="btn-delete small"
+                    title="Deactivate"
+                    :disabled="!item.is_active"
+                  >
+                    Deactivate
+                  </button>
+                </div>
               </td>
             </tr>
             <tr v-if="filteredDisciplines.length === 0 && !loading">
@@ -120,111 +127,107 @@
         </table>
 
         <div v-if="loading" class="loading-overlay">
-          <div class="spinner"></div>
+          <div class="minimal-spinner"></div>
         </div>
       </div>
-    </div>
+    </main>
 
     <!-- Modal Dialog: Create / Edit Discipline -->
-    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
-      <div class="modal-content glass-panel">
-        <div class="modal-header">
-          <h3>{{ isEditing ? 'Edit Discipline: ' + form.name : 'Create New Discipline' }}</h3>
-          <button @click="closeModal" class="modal-close">×</button>
-        </div>
-
-        <form @submit.prevent="saveDiscipline" class="modal-body">
-          <div class="form-row">
-            <div class="form-group">
-              <label>Slug (URL key):</label>
-              <input 
-                v-model="form.slug" 
-                type="text" 
-                required 
-                placeholder="e.g. cs2, valorant, pubg"
-                :disabled="isEditing"
-                class="form-input mono"
-              />
-            </div>
-            <div class="form-group">
-              <label>Display Name:</label>
-              <input 
-                v-model="form.name" 
-                type="text" 
-                required 
-                placeholder="e.g. Counter-Strike 2"
-                class="form-input"
-              />
-            </div>
+    <transition name="fade">
+      <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
+        <div class="modal">
+          <div class="modal-top">
+            <h3 class="modal-heading">{{ isEditing ? 'Edit Discipline' : 'New Discipline' }}</h3>
+            <button @click="closeModal" class="btn-close">✕</button>
           </div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label>Tier (Community scale):</label>
-              <select v-model="form.tier" class="form-input">
-                <option value="major">Major (>200 players)</option>
-                <option value="medium">Medium (50-200 players)</option>
-              </select>
+          <form @submit.prevent="saveDiscipline" class="modal-body">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Slug</label>
+                <input 
+                  v-model="form.slug" 
+                  type="text" 
+                  required 
+                  placeholder="e.g. cs2, valorant"
+                  :disabled="isEditing"
+                  class="form-input mono"
+                />
+              </div>
+              <div class="form-group">
+                <label>Display Name</label>
+                <input 
+                  v-model="form.name" 
+                  type="text" 
+                  required 
+                  placeholder="e.g. Counter-Strike 2"
+                  class="form-input"
+                />
+              </div>
             </div>
-            <div class="form-group">
-              <label>Telegram Chat / Community URL:</label>
-              <input 
-                v-model="form.chat_url" 
-                type="url" 
-                required 
-                placeholder="https://t.me/aitu_..."
-                class="form-input"
-              />
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Tier</label>
+                <select v-model="form.tier" class="form-input">
+                  <option value="major">Major</option>
+                  <option value="medium">Medium</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Telegram Chat Link</label>
+                <input 
+                  v-model="form.chat_url" 
+                  type="url" 
+                  required 
+                  placeholder="https://t.me/..."
+                  class="form-input"
+                />
+              </div>
             </div>
-          </div>
 
-          <div class="form-group">
-            <label>Description:</label>
-            <textarea 
-              v-model="form.description" 
-              rows="3" 
-              required 
-              placeholder="Short description displayed in Telegram Bot card..."
-              class="form-input"
-            ></textarea>
-          </div>
-
-          <!-- Curator Search & Assignment -->
-          <div class="form-group">
-            <label>Assigned Curator (Discipline Admin):</label>
-            <div class="curator-picker">
+            <div class="form-group">
+              <label>Curator</label>
               <select v-model="form.admin_id" class="form-input">
-                <option :value="null">-- No Curator (Unassigned) --</option>
+                <option :value="null">— None (Unassigned) —</option>
                 <option 
-                  v-for="u in eligibleUsers" 
-                  :key="u.telegram_id" 
-                  :value="u.telegram_id"
+                  v-for="user in eligibleUsers" 
+                  :key="user.telegram_id" 
+                  :value="user.telegram_id"
                 >
-                  {{ u.first_name }} {{ u.last_name || '' }} ({{ u.username ? '@' + u.username : u.telegram_id }}) - [{{ u.role }}]
+                  {{ user.first_name }} {{ user.last_name || '' }} ({{ user.username ? '@' + user.username : 'ID: ' + user.telegram_id }})
                 </option>
               </select>
             </div>
-            <span class="sub-hint">
-              💡 Selecting a Student automatically promotes them to DISCIPLINE_ADMIN and resets their session cache.
-            </span>
-          </div>
 
-          <div v-if="isEditing" class="form-group checkbox-group">
-            <label class="checkbox-label">
-              <input type="checkbox" v-model="form.is_active" />
-              <span>Active in Telegram Bot Catalog</span>
-            </label>
-          </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea 
+                v-model="form.description" 
+                rows="3" 
+                required 
+                placeholder="Brief summary of this discipline direction..."
+                class="form-input"
+              ></textarea>
+            </div>
 
-          <div class="modal-footer">
-            <button type="button" @click="closeModal" class="btn-secondary">Cancel</button>
-            <button type="submit" :disabled="modalSaving" class="btn-primary">
-              {{ modalSaving ? 'Saving...' : (isEditing ? 'Save Changes' : 'Create Discipline') }}
-            </button>
-          </div>
-        </form>
+            <div v-if="isEditing" class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="form.is_active" />
+                <span>Active</span>
+              </label>
+            </div>
+
+            <div class="modal-actions">
+              <button type="button" @click="closeModal" class="btn-subtle">Cancel</button>
+              <button type="submit" :disabled="modalSaving" class="btn-primary-action">
+                {{ modalSaving ? 'Saving...' : (isEditing ? 'Save Changes' : 'Create') }}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
+    </transition>
   </div>
 </template>
 
@@ -274,7 +277,7 @@ function showToast(message, type = 'success') {
   toast.value = { message, type }
   setTimeout(() => {
     if (toast.value.message === message) toast.value.message = ''
-  }, 5000)
+  }, 4000)
 }
 
 function truncate(text, len) {
@@ -347,7 +350,7 @@ async function saveDiscipline() {
         admin_id: form.value.admin_id,
         is_active: form.value.is_active,
       })
-      showToast(`Discipline "${form.value.name}" updated successfully! Role synchronization applied.`)
+      showToast(`Discipline "${form.value.name}" updated successfully.`)
     } else {
       await disciplineApi.create({
         slug: form.value.slug,
@@ -357,7 +360,7 @@ async function saveDiscipline() {
         chat_url: form.value.chat_url,
         admin_id: form.value.admin_id,
       })
-      showToast(`Discipline "${form.value.name}" created!`)
+      showToast(`Discipline "${form.value.name}" created.`)
     }
     closeModal()
     await fetchDisciplines()
@@ -400,234 +403,256 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.admin-container {
+.disciplines-page {
   min-height: 100vh;
-  padding: 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
+  background-color: var(--bg-color, #090a0f);
+  color: var(--text-primary, #f8fafc);
+  padding-bottom: 5rem;
 }
 
-.glass-header {
+/* Header */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(9, 10, 15, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--surface-border, rgba(255, 255, 255, 0.07));
+}
+
+.header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.85rem 1.5rem;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
-  padding: 1rem 1.5rem;
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  justify-content: space-between;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 2.5rem;
+  gap: 2rem;
 }
 
 .logo {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-}
-
-.logo h1 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
   gap: 0.5rem;
-}
-
-.badge {
-  font-size: 0.8rem;
-  background: #6c5ce7;
-  padding: 0.2rem 0.5rem;
-  border-radius: 6px;
-}
-
-.nav-tabs {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.tab-link {
-  color: #a0a0b0;
   text-decoration: none;
+  color: inherit;
+}
+
+.logo-mark {
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
+.logo-text {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.logo-pill {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  padding: 0.1rem 0.45rem;
+  border-radius: 9999px;
+  margin-left: 0.25rem;
+}
+
+.nav {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.nav-item {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.88rem;
   font-weight: 500;
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  transition: all 0.2s;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-sm, 6px);
+  transition: all 0.15s ease;
 }
 
-.tab-link:hover {
+.nav-item:hover {
   color: #fff;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
 }
 
-.tab-link.active {
+.nav-item.active {
   color: #fff;
-  background: rgba(108, 92, 231, 0.25);
-  border: 1px solid rgba(108, 92, 231, 0.5);
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.user-menu {
+.header-right {
   display: flex;
   align-items: center;
   gap: 1rem;
 }
 
-.username {
-  font-weight: 500;
+.admin-user {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
 }
 
-.btn-logout {
-  background: rgba(255, 255, 255, 0.1);
-  border: none;
-  color: #ff7675;
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.2s;
+.btn-ghost {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s;
 }
 
-.btn-logout:hover {
-  background: rgba(255, 118, 117, 0.2);
+.btn-ghost:hover {
+  color: #fff;
 }
 
+.text-danger { color: #f87171 !important; }
+
+/* Toast */
 .toast-banner {
-  margin-bottom: 1.5rem;
-  padding: 1rem 1.5rem;
-  border-radius: 10px;
+  max-width: 1200px;
+  margin: 1rem auto 0 auto;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-sm);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  font-size: 0.85rem;
   font-weight: 500;
 }
 
 .toast-banner.success {
-  background: rgba(46, 204, 113, 0.2);
-  border: 1px solid rgba(46, 204, 113, 0.4);
-  color: #2ecc71;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #34d399;
 }
 
 .toast-banner.error {
-  background: rgba(231, 76, 60, 0.2);
-  border: 1px solid rgba(231, 76, 60, 0.4);
-  color: #e74c3c;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #f87171;
 }
 
 .toast-close {
-  background: none;
-  border: none;
   color: inherit;
-  font-size: 1.2rem;
-  cursor: pointer;
+  font-size: 0.85rem;
 }
 
-.glass-panel {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(12px);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 1.5rem;
+/* Page Body */
+.page-body {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
 }
 
 .toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   margin-bottom: 1.5rem;
-  flex-wrap: wrap;
-  gap: 1rem;
 }
 
 .toolbar-title {
   display: flex;
-  align-items: center;
-  gap: 1rem;
+  align-items: baseline;
+  gap: 0.75rem;
 }
 
-.counter-badge {
-  font-size: 0.8rem;
-  background: rgba(255, 255, 255, 0.1);
-  padding: 0.3rem 0.6rem;
-  border-radius: 12px;
-  color: #a0a0b0;
+.toolbar-title h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.count-badge {
+  font-size: 0.82rem;
+  color: var(--text-muted);
 }
 
 .toolbar-actions {
   display: flex;
-  gap: 1rem;
-}
-
-.search-box {
-  display: flex;
   align-items: center;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 0.5rem 1rem;
-  width: 280px;
+  gap: 0.75rem;
 }
 
-.search-box input {
-  background: transparent;
-  border: none;
-  color: #fff;
-  margin-left: 0.5rem;
-  outline: none;
+.search-wrap {
+  width: 240px;
+}
+
+.search-input {
   width: 100%;
-}
-
-.btn-primary {
-  background: #6c5ce7;
-  color: white;
-  border: none;
-  padding: 0.6rem 1.2rem;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-primary:hover {
-  background: #5b4bc4;
-  transform: translateY(-1px);
-}
-
-.btn-secondary {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
   color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 0.6rem 1.2rem;
-  border-radius: 8px;
-  cursor: pointer;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
 }
 
-.table-wrapper {
-  overflow-x: auto;
+.search-input:focus {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.btn-primary-action {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
+}
+
+.btn-primary-action:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* Table */
+.table-container {
   position: relative;
-  min-height: 250px;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
 }
 
-table {
+.minimal-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
 }
 
-th {
-  padding: 1rem;
-  color: #a0a0b0;
+.minimal-table th {
+  padding: 0.85rem 1.25rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--surface-border);
 }
 
-td {
-  padding: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  vertical-align: middle;
+.minimal-table td {
+  padding: 0.85rem 1.25rem;
+  font-size: 0.88rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.minimal-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.mono {
+  font-family: monospace;
+  color: #cbd5e1;
 }
 
 .name-cell {
@@ -636,28 +661,22 @@ td {
 }
 
 .sub-text {
-  font-size: 0.8rem;
-  color: #a0a0b0;
-  margin-top: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
-.tier-badge {
-  padding: 0.25rem 0.6rem;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 600;
+.tier-pill {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
 }
 
-.tier-badge.major {
-  background: rgba(230, 126, 34, 0.2);
-  color: #e67e22;
-  border: 1px solid rgba(230, 126, 34, 0.4);
-}
-
-.tier-badge.medium {
-  background: rgba(52, 152, 219, 0.2);
-  color: #3498db;
-  border: 1px solid rgba(52, 152, 219, 0.4);
+.tier-pill.major {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.1);
 }
 
 .curator-info {
@@ -666,62 +685,86 @@ td {
 }
 
 .curator-name {
-  font-weight: 600;
-  color: #a29bfe;
+  font-size: 0.88rem;
+  font-weight: 500;
 }
 
 .curator-unassigned {
-  color: #7f8c8d;
-  font-style: italic;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
 }
 
 .chat-link {
-  color: #00cec9;
-  text-decoration: none;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  color: var(--accent);
 }
 
 .chat-link:hover {
   text-decoration: underline;
 }
 
-.status-badge {
-  padding: 0.25rem 0.6rem;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 600;
+.status-dot-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-.status-badge.verified {
-  background: rgba(46, 204, 113, 0.2);
-  color: #2ecc71;
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
 }
 
-.status-badge.pending {
-  background: rgba(149, 165, 166, 0.2);
-  color: #95a5a6;
+.status-dot.active { background: var(--success, #10b981); }
+.status-dot.inactive { background: var(--text-muted); }
+
+.status-text {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
 }
+
+.text-right { text-align: right; }
 
 .actions {
-  display: flex;
-  gap: 0.5rem;
+  display: inline-flex;
+  gap: 0.4rem;
 }
 
-.btn-icon {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 0.4rem 0.6rem;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
+.btn-subtle {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--surface-border);
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
 }
 
-.btn-icon:hover {
-  background: rgba(255, 255, 255, 0.15);
+.btn-subtle:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.btn-icon:disabled {
+.btn-subtle.small, .btn-delete.small {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.btn-delete {
+  font-size: 0.8rem;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
+}
+
+.btn-delete:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.btn-delete:disabled {
   opacity: 0.3;
   cursor: not-allowed;
 }
@@ -729,136 +772,142 @@ td {
 .empty-state {
   text-align: center;
   padding: 3rem;
-  color: #a0a0b0;
-}
-
-.mono {
-  font-family: monospace;
-}
-
-.font-bold {
-  font-weight: 700;
-}
-
-/* Modal Styling */
-.modal-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(5px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  width: 90%;
-  max-width: 650px;
-  background: #1e1e2f;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding-bottom: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.modal-header h3 {
-  font-size: 1.25rem;
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  color: #a0a0b0;
-  font-size: 1.5rem;
-  cursor: pointer;
-}
-
-.form-row {
-  display: flex;
-  gap: 1rem;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1.2rem;
-  flex: 1;
-}
-
-.form-group label {
-  font-size: 0.85rem;
-  color: #a0a0b0;
-  font-weight: 500;
-}
-
-.form-input {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 0.6rem 0.8rem;
-  border-radius: 8px;
-  color: #fff;
-  outline: none;
-}
-
-.form-input:focus {
-  border-color: #6c5ce7;
-}
-
-.sub-hint {
-  font-size: 0.75rem;
-  color: #fdcb6e;
-  line-height: 1.3;
-}
-
-.checkbox-group {
-  flex-direction: row;
-  align-items: center;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #fff;
-  cursor: pointer;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 1rem;
-  margin-top: 1.5rem;
+  color: var(--text-muted);
 }
 
 .loading-overlay {
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(2px);
+  inset: 0;
+  background: rgba(9, 10, 15, 0.6);
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
 }
 
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(108, 92, 231, 0.3);
+.minimal-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #fff;
   border-radius: 50%;
-  border-top-color: #6c5ce7;
-  animation: spin 1s ease-in-out infinite;
+  animation: spin 0.7s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.modal {
+  width: 100%;
+  max-width: 520px;
+  background: #0f1117;
+  border: 1px solid var(--surface-border-hover);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.modal-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.modal-heading {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.btn-close {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.btn-close:hover { color: #fff; }
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+  margin-bottom: 0.85rem;
+}
+
+.form-group {
+  margin-bottom: 0.85rem;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.35rem;
+}
+
+.form-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.form-input:focus {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.form-input:disabled {
+  opacity: 0.5;
+}
+
+.checkbox-group {
+  margin-top: 0.5rem;
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--surface-border);
+  margin-top: 1rem;
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 640px) {
+  .form-row { grid-template-columns: 1fr; }
+  .header-left { gap: 1rem; }
 }
 </style>
