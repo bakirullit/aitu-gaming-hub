@@ -4,7 +4,7 @@
       <div class="login-header">
         <router-link to="/tournaments" class="back-link">← Tournaments</router-link>
         <div class="brand">
-          <span class="logo-mark">AITU</span>
+          <img src="/logo.png" alt="AITU Gaming" class="brand-logo-login" />
           <h2>Admin Login</h2>
         </div>
         <p class="subtitle">Authenticate with your university Telegram account.</p>
@@ -157,21 +157,19 @@ const verifyOtp = async () => {
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.85rem;
   margin-bottom: 0.5rem;
 }
 
-.logo-mark {
-  font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  background: rgba(255, 255, 255, 0.1);
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
+.brand-logo-login {
+  height: 36px;
+  width: auto;
+  object-fit: contain;
+  display: block;
 }
 
 .brand h2 {
-  font-size: 1.35rem;
+  font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: -0.5px;
 }

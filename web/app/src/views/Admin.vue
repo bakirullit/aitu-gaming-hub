@@ -5,8 +5,7 @@
       <div class="header-inner">
         <div class="header-left">
           <router-link to="/admin" class="logo">
-            <span class="logo-mark">AITU</span>
-            <span class="logo-text">Gaming Hub</span>
+            <img src="/logo.png" alt="AITU Gaming" class="brand-logo" />
             <span class="logo-pill">Admin</span>
           </router-link>
           <nav class="nav">
@@ -251,18 +250,11 @@ onMounted(() => {
   color: inherit;
 }
 
-.logo-mark {
-  font-weight: 700;
-  font-size: 0.95rem;
-  letter-spacing: 0.5px;
-  background: rgba(255, 255, 255, 0.1);
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-}
-
-.logo-text {
-  font-weight: 600;
-  font-size: 0.95rem;
+.brand-logo {
+  height: 28px;
+  width: auto;
+  object-fit: contain;
+  display: block;
 }
 
 .logo-pill {
