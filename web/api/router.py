@@ -10,11 +10,18 @@ from common.dtos.web import UserResponse, PaginatedUsersResponse, RoleUpdateRequ
 from web.api.dependencies import get_current_admin, get_db_session
 from web.api.auth import auth_router
 from web.api.disciplines import disciplines_router
+from web.api.tournaments import tournaments_router
 from core.lifespan import runtime
 
+# Admin-only router (/api/admin/*)
 web_router = APIRouter(prefix="/api/admin")
 web_router.include_router(auth_router)
 web_router.include_router(disciplines_router)
+
+# Public router (/api/*) - accessible without auth
+public_router = APIRouter(prefix="/api")
+public_router.include_router(tournaments_router)
+
 
 
 users_router = APIRouter(prefix="/users", tags=["Users"])

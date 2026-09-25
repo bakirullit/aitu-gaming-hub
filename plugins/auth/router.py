@@ -1,7 +1,7 @@
 import re
 import logging
 from aiogram import Router, F
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup, default_state
 from aiogram.types import CallbackQuery, Message
@@ -54,7 +54,12 @@ def setup_auth_routes(core: CoreContext) -> Router:
     core.navigator.register_screen_renderer("home", render_home)  # type: ignore
 
     @router.message(CommandStart())
-    async def cmd_start(message: Message, session: AsyncSession, state: FSMContext) -> None:
+    async def cmd_start(
+        message: Message,
+        session: AsyncSession,
+        state: FSMContext,
+        command: CommandObject | None = None,
+    ) -> None:
         await state.clear()
         user_id = message.from_user.id
         chat_id = message.chat.id
@@ -85,8 +90,36 @@ def setup_auth_routes(core: CoreContext) -> Router:
             await session.commit()
             await session.refresh(user)
 
-        # Reset history and render Welcome screen
+        # Reset history
         await core.navigator.reset_history(user_id)
+
+        # Check for tournament deep-link (e.g., /start tourn_12)
+        if command and command.args and command.args.startswith("tourn_"):
+            try:
+                tourn_id = int(command.args.split("_", 1)[1])
+                from common.models.tournament import TournamentBooking
+                from plugins.tournaments.screens import get_student_tournament_detail_screen
+
+                stmt_t = select(TournamentBooking).where(TournamentBooking.id == tourn_id)
+                res_t = await session.execute(stmt_t)
+                tournament = res_t.scalar_one_or_none()
+                if tournament:
+                    screen = get_student_tournament_detail_screen(
+                        tournament=tournament,
+                        is_verified=user.is_verified,
+                    )
+                    await core.navigator.render(
+                        user_id=user_id,
+                        chat_id=chat_id,
+                        screen=screen,
+                        screen_id=f"tourn:detail:{tourn_id}",
+                        push_to_history=True,
+                    )
+                    return
+            except Exception as exc:
+                logger.warning(f"Error processing tournament deep-link: {exc}")
+
+        # Default Welcome screen
         full_name = f"{user.first_name} {user.last_name}".strip() if user.first_name else "Студент"
         screen = get_welcome_screen(is_verified=user.is_verified, full_name=full_name)
         await core.navigator.render(

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from common.enums import UserRole
-from datetime import datetime
+from datetime import date, datetime
 
 class OTPRequest(BaseModel):
     identifier: str = Field(..., description="Telegram ID (int/str) or @username")
@@ -84,4 +84,41 @@ class DisciplineUpdateRequest(BaseModel):
     chat_url: str | None = Field(None, min_length=5, max_length=255)
     admin_id: int | None = None
     is_active: bool | None = None
+
+
+class TournamentPublicResponse(BaseModel):
+    id: int
+    title: str
+    discipline: str
+    booking_date: date
+    event_format: str
+    format_label: str
+    status: str
+    rulebook_url: str | None = None
+    rulebook_file_id: str | None = None
+    creator_name: str | None = None
+    bot_registration_url: str
+    created_at: datetime
+    days_until: int
+    is_past: bool
+
+    class Config:
+        from_attributes = True
+
+
+class TournamentStatsResponse(BaseModel):
+    total_tournaments: int
+    upcoming_tournaments: int
+    active_disciplines: int
+    disciplines: list[str]
+
+
+class PaginatedTournamentsResponse(BaseModel):
+    items: list[TournamentPublicResponse]
+    total: int
+    limit: int
+    offset: int
+    bot_username: str
+    stats: TournamentStatsResponse
+
 

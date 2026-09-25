@@ -3,9 +3,12 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Admin from '../views/Admin.vue'
 import Disciplines from '../views/Disciplines.vue'
 import Login from '../views/Login.vue'
+import Tournaments from '../views/Tournaments.vue'
 
 const routes = [
-  { path: '/', redirect: '/admin' },
+  { path: '/', redirect: '/tournaments' },
+  { path: '/tournaments', component: Tournaments },
+  { path: '/admin/tournaments', component: Tournaments },
   { path: '/login', component: Login },
   { 
     path: '/admin', 

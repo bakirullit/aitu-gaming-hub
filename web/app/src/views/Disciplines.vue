@@ -7,6 +7,7 @@
           <h1>AITU Gaming Hub <span class="badge">Admin</span></h1>
         </div>
         <nav class="nav-tabs">
+          <router-link to="/tournaments" class="tab-link">🏆 Tournaments</router-link>
           <router-link to="/admin" class="tab-link">👥 Members</router-link>
           <router-link to="/admin/disciplines" class="tab-link active">🎮 Disciplines</router-link>
         </nav>

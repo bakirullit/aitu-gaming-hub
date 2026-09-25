@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     # Telegram Bot
     BOT_TOKEN: str = Field(default="mock_token_for_tests")
+    BOT_USERNAME: str = Field(default="aitu_gaming_bot")
     WEBHOOK_URL: str | None = None
     WEBHOOK_PATH: str = "/webhook"
     WEBHOOK_SECRET: str | None = None

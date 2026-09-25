@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from common.dtos.screen import Screen
+from common.enums import TournamentStatus
 from common.models.tournament import TournamentBooking
 from common.models.user import User
 
@@ -410,3 +411,43 @@ def build_admin_approval_text(
         f"• <b>Регламент:</b> {rulebook_info}\n\n"
         "👉 <i>Выберите решение по бронированию даты:</i>"
     )
+
+
+def get_student_tournament_detail_screen(tournament: TournamentBooking, is_verified: bool) -> Screen:
+    """Public tournament view rendered inside Telegram when accessed via deep-link."""
+    date_str = tournament.booking_date.strftime("%d.%m.%Y")
+    format_label = format_summary_label(tournament.event_format)
+    discipline_str = str(tournament.discipline.value if hasattr(tournament.discipline, "value") else tournament.discipline)
+
+    status_badge = "🟢 Регистрация активна" if tournament.status == TournamentStatus.APPROVED else "⏳ Ожидает утверждения"
+
+    text = (
+        f"🏆 <b>Турнир: {tournament.title}</b>\n\n"
+        f"🎮 <b>Дисциплина:</b> {discipline_str}\n"
+        f"📅 <b>Дата проведения:</b> {date_str}\n"
+        f"📋 <b>Формат матчей:</b> {format_label}\n"
+        f"📌 <b>Статус:</b> {status_badge}\n\n"
+    )
+
+    if tournament.rulebook_url:
+        text += f"📜 <b>Регламент:</b> <a href='{tournament.rulebook_url}'>Ознакомиться с правилами</a>\n\n"
+
+    buttons = []
+    if not is_verified:
+        text += (
+            "⚠️ <b>Внимание!</b>\n"
+            "Для участия в официальных турнирах клуба AITU Gaming Hub требуется верификация студенческого билета/штрихкода.\n\n"
+            "Пройдите быструю верификацию, чтобы присоединиться к турниру:"
+        )
+        buttons.append([InlineKeyboardButton(text="🎓 Пройти верификацию AITU", callback_data="auth:verify")])
+    else:
+        text += (
+            "✅ <b>Вы подтвержденный участник AITU!</b>\n"
+            "Вступайте в чат вашей дисциплины, чтобы следить за сеткой и координацией матчей:"
+        )
+        buttons.append([InlineKeyboardButton(text="🎮 Каталог дисциплин & Чаты", callback_data="nav:disciplines")])
+
+    buttons.append([InlineKeyboardButton(text="◀️ Главное меню", callback_data="nav:home")])
+
+    return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+
