@@ -11,10 +11,12 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aitu_net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-aitu_gaming_hub}"]
-      interval: 5s
-      timeout: 5s
+      interval: 3s
+      timeout: 3s
       retries: 5
 
   redis:
@@ -25,10 +27,12 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - aitu_net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
+      interval: 3s
+      timeout: 3s
       retries: 5
 
   app:
@@ -42,6 +46,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - aitu_net
     env_file:
       - .env
     environment:
@@ -51,6 +57,10 @@ services:
       - PORT=8000
     ports:
       - "8000:8000"
+
+networks:
+  aitu_net:
+    driver: bridge
 
 volumes:
   postgres_data:
