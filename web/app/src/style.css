@@ -1,26 +1,28 @@
 :root {
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", "Helvetica Neue", sans-serif;
-  --bg-color: #090a0f;
-  --surface-bg: #0f1117;
-  --surface-hover: #161822;
-  --surface-border: rgba(255, 255, 255, 0.07);
-  --surface-border-hover: rgba(255, 255, 255, 0.14);
+  --bg-color: #0a0d14;
+  --surface-bg: #10141f;
+  --surface-hover: #161c2b;
+  --surface-border: rgba(255, 255, 255, 0.08);
+  --surface-border-hover: rgba(255, 255, 255, 0.16);
   
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
   
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --accent-subtle: rgba(59, 130, 246, 0.1);
-  --accent-border: rgba(59, 130, 246, 0.3);
+  /* Red Esports Accent Theme */
+  --accent: #ef4444;
+  --accent-hover: #dc2626;
+  --accent-subtle: rgba(239, 68, 68, 0.12);
+  --accent-border: rgba(239, 68, 68, 0.35);
+  --accent-glow: rgba(239, 68, 68, 0.25);
   
   --success: #10b981;
-  --success-subtle: rgba(16, 185, 129, 0.1);
+  --success-subtle: rgba(16, 185, 129, 0.12);
   --warning: #f59e0b;
-  --warning-subtle: rgba(245, 158, 11, 0.1);
+  --warning-subtle: rgba(245, 158, 11, 0.12);
   --danger: #ef4444;
-  --danger-subtle: rgba(239, 68, 68, 0.1);
+  --danger-subtle: rgba(239, 68, 68, 0.12);
   
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -89,5 +91,5 @@ a {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--accent);
 }

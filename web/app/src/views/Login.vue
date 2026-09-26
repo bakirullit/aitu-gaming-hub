@@ -206,7 +206,7 @@ const verifyOtp = async () => {
 }
 
 .minimal-input:focus {
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: var(--accent);
 }
 
 .code-input {
@@ -220,8 +220,7 @@ const verifyOtp = async () => {
   width: 100%;
   padding: 0.7rem;
   border-radius: var(--radius-sm, 6px);
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--accent);
   color: #fff;
   font-size: 0.9rem;
   font-weight: 600;
@@ -230,7 +229,8 @@ const verifyOtp = async () => {
 }
 
 .btn-submit:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--accent-hover);
+  box-shadow: 0 0 12px var(--accent-glow);
 }
 
 .btn-submit:disabled {

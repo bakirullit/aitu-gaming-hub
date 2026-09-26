@@ -68,7 +68,10 @@
               <td class="mono">{{ item.slug }}</td>
               <td>
                 <div class="name-cell">
-                  <strong>{{ item.name }}</strong>
+                  <div class="name-with-logo">
+                    <GameLogo :discipline="item.slug" :size="20" />
+                    <strong>{{ item.name }}</strong>
+                  </div>
                   <span class="sub-text">{{ truncate(item.description, 50) }}</span>
                 </div>
               </td>
@@ -234,6 +237,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { disciplineApi, userApi } from '../services/api'
+import GameLogo from '../components/GameLogo.vue'
 
 const router = useRouter()
 const currentUser = ref(null)
@@ -465,22 +469,31 @@ onMounted(() => {
 }
 
 .nav-item {
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary);
   font-size: 0.88rem;
   font-weight: 500;
-  padding: 0.4rem 0.75rem;
-  border-radius: var(--radius-sm, 6px);
-  transition: all 0.15s ease;
+  padding: 0.5rem 0.85rem;
+  position: relative;
+  transition: color 0.15s;
 }
 
 .nav-item:hover {
   color: #fff;
-  background: rgba(255, 255, 255, 0.04);
 }
 
 .nav-item.active {
   color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+}
+
+.nav-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: -0.85rem;
+  left: 0.5rem;
+  right: 0.5rem;
+  height: 2px;
+  background-color: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
 }
 
 .header-right {
@@ -594,17 +607,17 @@ onMounted(() => {
 
 .btn-primary-action {
   font-size: 0.85rem;
-  font-weight: 500;
+  font-weight: 600;
   color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 0.45rem 0.85rem;
+  background: var(--accent);
+  padding: 0.45rem 0.95rem;
   border-radius: var(--radius-sm);
   transition: all 0.15s;
 }
 
 .btn-primary-action:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--accent-hover);
+  box-shadow: 0 0 10px var(--accent-glow);
 }
 
 /* Table */
@@ -650,6 +663,12 @@ onMounted(() => {
 .name-cell {
   display: flex;
   flex-direction: column;
+}
+
+.name-with-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .sub-text {
