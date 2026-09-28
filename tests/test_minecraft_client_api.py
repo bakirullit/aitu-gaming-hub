@@ -182,6 +182,46 @@ async def test_auth_full_flow(mc_db_setup):
 
 
 @pytest.mark.asyncio
+async def test_auth_java_client_payload_flow(mc_db_setup):
+    """Verify authentication using Java Mod Client payload format (pin, tag, mc_nick)."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # Step 1: request code
+        req_res = await ac.post(
+            "/api/auth/request-code",
+            json={
+                "telegram_tag": "@alex_aitu",
+                "minecraft_nickname": "AlexMiner",
+            },
+        )
+        assert req_res.status_code == 200
+
+        from web.api.minecraft import _cache_get
+        import json
+        cached_str = await _cache_get("auth:pin:alex_aitu")
+        cached_data = json.loads(cached_str)
+        pin = cached_data["pin"]
+
+        # Step 2: verify using exact Java client fields
+        verify_res = await ac.post(
+            "/api/auth/verify",
+            json={
+                "telegram_tag": "@alex_aitu",
+                "tag": "@alex_aitu",
+                "pin": pin,
+                "minecraft_nickname": "AlexMiner",
+                "mc_nick": "AlexMiner",
+            },
+        )
+        assert verify_res.status_code == 200
+        data = verify_res.json()
+        assert data["status"] == "success"
+        assert data["session_token"]
+        assert data["token"] == data["session_token"]
+        assert data["telegram_tag"] == "@alex_aitu"
+        assert data["tag"] == "@alex_aitu"
+
+
+@pytest.mark.asyncio
 async def test_friends_endpoints_unauthenticated():
     """Verify friends endpoints provide mock/foundation data when unauthenticated."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:

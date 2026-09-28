@@ -164,7 +164,7 @@ async def request_code(
     Normalizes tag, finds user by telegram username, caches PIN in Redis for 5 minutes,
     and dispatches code to user's Telegram chat.
     """
-    clean_tag = payload.telegram_tag.strip().lstrip("@").lower()
+    clean_tag = (payload.telegram_tag or payload.tag or "").strip().lstrip("@").lower()
     if not clean_tag:
         raise HTTPException(
             status_code=404,
@@ -186,9 +186,10 @@ async def request_code(
 
     # Store in Redis with 5-minute TTL
     redis_key = f"auth:pin:{clean_tag}"
+    nick = (payload.minecraft_nickname or payload.mc_nick or "Player").strip()
     pin_data = {
         "pin": pin,
-        "mc_nick": payload.minecraft_nickname.strip(),
+        "mc_nick": nick,
         "user_id": user.telegram_id,
     }
     await _cache_set(redis_key, json.dumps(pin_data), ex=300)
@@ -219,7 +220,12 @@ async def verify_code(
     Verify 6-digit PIN, generate persistent session token, save session in DB & Redis,
     link Minecraft nickname, and invalidate the PIN.
     """
-    clean_tag = payload.telegram_tag.strip().lstrip("@").lower()
+    clean_tag = (payload.telegram_tag or payload.tag or "").strip().lstrip("@").lower()
+    code_val = str(payload.code if payload.code is not None else (payload.pin or "")).strip()
+
+    if not clean_tag or not code_val:
+        raise HTTPException(status_code=400, detail="Invalid request parameters: tag and code/pin required")
+
     redis_key = f"auth:pin:{clean_tag}"
 
     cached_str = await _cache_get(redis_key)
@@ -231,7 +237,7 @@ async def verify_code(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid or expired code")
 
-    if str(cached_data.get("pin")).strip() != str(payload.code).strip():
+    if str(cached_data.get("pin")).strip() != code_val:
         raise HTTPException(status_code=400, detail="Invalid or expired code")
 
     # Find User
@@ -250,7 +256,8 @@ async def verify_code(
 
     # Generate persistent cryptographically secure session token
     session_token = uuid.uuid4().hex
-    mc_nick = payload.minecraft_nickname.strip() or cached_data.get("mc_nick", "Player")
+    raw_nick = (payload.minecraft_nickname or payload.mc_nick or "").strip()
+    mc_nick = raw_nick or cached_data.get("mc_nick", "Player")
 
     # Save session in DB
     mc_session = MinecraftSession(
@@ -291,11 +298,15 @@ async def verify_code(
     # Delete used PIN from Redis
     await _cache_delete(redis_key)
 
+    formatted_tag = f"@{user.username}" if user.username else f"@{clean_tag}"
     return MinecraftVerifyResponse(
         status="success",
         session_token=session_token,
+        token=session_token,
         telegram_id=user.telegram_id,
         username=user.username or clean_tag,
+        telegram_tag=formatted_tag,
+        tag=formatted_tag,
     )
 
 

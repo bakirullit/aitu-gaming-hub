@@ -3,8 +3,10 @@ from typing import Optional
 
 
 class MinecraftRequestCodePayload(BaseModel):
-    telegram_tag: str = Field(..., description="Telegram handle (e.g. @username or username)")
-    minecraft_nickname: str = Field(..., description="Minecraft Java player nickname")
+    telegram_tag: Optional[str] = Field(None, description="Telegram handle (e.g. @username or username)")
+    tag: Optional[str] = Field(None, description="Alternative tag field")
+    minecraft_nickname: Optional[str] = Field(None, description="Minecraft Java player nickname")
+    mc_nick: Optional[str] = Field(None, description="Minecraft nickname alias")
 
 
 class MinecraftRequestCodeResponse(BaseModel):
@@ -13,16 +15,22 @@ class MinecraftRequestCodeResponse(BaseModel):
 
 
 class MinecraftVerifyPayload(BaseModel):
-    telegram_tag: str = Field(..., description="Telegram handle (e.g. @username or username)")
-    code: str = Field(..., description="6-digit verification code")
-    minecraft_nickname: str = Field(..., description="Minecraft Java player nickname")
+    telegram_tag: Optional[str] = Field(None, description="Telegram handle (e.g. @username or username)")
+    tag: Optional[str] = Field(None, description="Alternative tag field")
+    code: Optional[str] = Field(None, description="6-digit verification code")
+    pin: Optional[str] = Field(None, description="6-digit verification PIN")
+    minecraft_nickname: Optional[str] = Field(None, description="Minecraft Java player nickname")
+    mc_nick: Optional[str] = Field(None, description="Minecraft nickname alias")
 
 
 class MinecraftVerifyResponse(BaseModel):
     status: str = "success"
     session_token: str
+    token: Optional[str] = None
     telegram_id: int
     username: str
+    telegram_tag: Optional[str] = None
+    tag: Optional[str] = None
 
 
 class MinecraftServerInfoResponse(BaseModel):
