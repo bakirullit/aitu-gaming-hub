@@ -22,6 +22,7 @@ class User(Base, TimestampMixin):
         nullable=False,
     )
     is_verified: Mapped[bool] = mapped_column(default=False, nullable=False)
+    minecraft_nickname: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     @property
     def id(self) -> int:

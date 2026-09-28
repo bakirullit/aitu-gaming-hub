@@ -27,13 +27,20 @@ class DatabaseSessionManager:
         if self._engine is not None:
             return
 
+        engine_kwargs: dict[str, Any] = {
+            "echo": (settings.ENVIRONMENT == "development"),
+            "future": True,
+        }
+        if "sqlite" not in self._url:
+            engine_kwargs.update({
+                "pool_pre_ping": True,
+                "pool_size": 10,
+                "max_overflow": 20,
+            })
+
         self._engine = create_async_engine(
             self._url,
-            echo=(settings.ENVIRONMENT == "development"),
-            future=True,
-            pool_pre_ping=True,
-            pool_size=10,
-            max_overflow=20,
+            **engine_kwargs,
         )
         self._sessionmaker = async_sessionmaker(
             bind=self._engine,
