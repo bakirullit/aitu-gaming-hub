@@ -30,11 +30,16 @@ class Settings(BaseSettings):
     # Redis Cache & Sessions
     REDIS_URL: str = Field(default="redis://localhost:6379/0")
 
-    # Minecraft Server Settings (RCON)
+    # Minecraft Server Settings (RCON & Public Server Info)
     MINECRAFT_HOST: str = "127.0.0.1"
     MINECRAFT_RCON_PORT: int = 25575
     MINECRAFT_RCON_PASSWORD: str = ""
     MINECRAFT_RCON_TIMEOUT: float = 3.0
+    MINECRAFT_SERVER_IP: str = "mc.aitu-gaming.y-not-devs.com:25565"
+    MINECRAFT_SERVER_NAME: str = "AITU Official SMP / Create"
+    MINECRAFT_SERVER_MOTD: str = "Welcome to AITU Gaming Network!"
+    MINECRAFT_MAX_PLAYERS: int = 50
+    MINECRAFT_DEFAULT_ONLINE: int = 14
 
     # Helpdesk & Tournament Settings
     HELPDESK_ADMIN_CHAT_ID: int | None = None

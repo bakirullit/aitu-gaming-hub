@@ -23,5 +23,9 @@ class User(Base, TimestampMixin):
     )
     is_verified: Mapped[bool] = mapped_column(default=False, nullable=False)
 
+    @property
+    def id(self) -> int:
+        return self.telegram_id
+
     def __repr__(self) -> str:
         return f"<User telegram_id={self.telegram_id} barcode={self.barcode} role={self.role}>"

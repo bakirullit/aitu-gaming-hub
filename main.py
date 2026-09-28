@@ -22,11 +22,12 @@ app = FastAPI(
     description="High-performance, modular Telegram platform for Astana IT University esports club",
     version="1.0.0",
     lifespan=app_lifespan,
+    redirect_slashes=False,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

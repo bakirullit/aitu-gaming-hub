@@ -11,16 +11,26 @@ from web.api.dependencies import get_current_admin, get_db_session
 from web.api.auth import auth_router
 from web.api.disciplines import disciplines_router
 from web.api.tournaments import tournaments_router
+from web.api.minecraft import (
+    minecraft_router,
+    mc_auth_router,
+    mc_server_router,
+    mc_friends_router,
+)
 from core.lifespan import runtime
 
 # Admin-only router (/api/admin/*)
-web_router = APIRouter(prefix="/api/admin")
+web_router = APIRouter(prefix="/api/admin", redirect_slashes=False)
 web_router.include_router(auth_router)
 web_router.include_router(disciplines_router)
 
-# Public router (/api/*) - accessible without auth
-public_router = APIRouter(prefix="/api")
+# Public router (/api/*) - accessible without auth / client endpoints
+public_router = APIRouter(prefix="/api", redirect_slashes=False)
 public_router.include_router(tournaments_router)
+public_router.include_router(mc_auth_router)
+public_router.include_router(mc_server_router)
+public_router.include_router(mc_friends_router)
+
 
 
 
