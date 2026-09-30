@@ -125,7 +125,7 @@ def test_minecraft_code_screen():
     screen = get_minecraft_code_screen(pin="123456", nickname="SteveCraft")
     assert "123456" in screen.text
     assert "SteveCraft" in screen.text
-    assert "5 минут" in screen.text
+    assert "3 минуты" in screen.text
 
     buttons = [b for row in screen.reply_markup.inline_keyboard for b in row]
     assert any(b.callback_data == "cb_mc_profile" for b in buttons)

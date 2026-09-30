@@ -326,3 +326,127 @@ async def test_friends_flow_authenticated(mc_db_setup):
         assert len(friends1) == 1
         assert friends1[0]["nickname"] == "AlexPro"
         assert friends1[0]["telegram_tag"] == "@alex_aitu"
+
+
+@pytest.mark.asyncio
+async def test_auth_otp_message_lifecycle(mc_db_setup):
+    """Verify that OTP message is tracked, deleted immediately on submission, and can delete on timeout."""
+    import json
+    from unittest.mock import AsyncMock, MagicMock
+    from core.lifespan import runtime
+    from web.api.minecraft import _cache_get, _delete_mc_otp_message_delayed
+
+    mock_bot = MagicMock()
+    mock_sent_msg = MagicMock()
+    mock_sent_msg.message_id = 998877
+    mock_bot.send_message = AsyncMock(return_value=mock_sent_msg)
+    mock_bot.delete_message = AsyncMock()
+
+    original_bot = runtime.bot
+    runtime.bot = mock_bot
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            # 1. Request code
+            res = await ac.post(
+                "/api/auth/request-code",
+                json={"telegram_tag": "@steve_aitu", "minecraft_nickname": "SteveCraft"},
+            )
+            assert res.status_code == 200
+            assert mock_bot.send_message.called
+            sent_args = mock_bot.send_message.call_args[1]
+            assert "Valid for 3 minutes" in sent_args["text"]
+
+            # Check cached message id
+            cached_msg_id = await _cache_get("auth:pin:msg:steve_aitu")
+            assert cached_msg_id == "998877"
+
+            cached_pin_data = json.loads(await _cache_get("auth:pin:steve_aitu"))
+            pin = cached_pin_data["pin"]
+            assert cached_pin_data["message_id"] == 998877
+
+            # 2. Verify with correct code -> message must be deleted immediately
+            verify_res = await ac.post(
+                "/api/auth/verify",
+                json={"telegram_tag": "@steve_aitu", "code": pin, "minecraft_nickname": "SteveCraft"},
+            )
+            assert verify_res.status_code == 200
+            mock_bot.delete_message.assert_called_with(chat_id=123456789, message_id=998877)
+
+            # Both keys must be cleared
+            assert await _cache_get("auth:pin:steve_aitu") is None
+            assert await _cache_get("auth:pin:msg:steve_aitu") is None
+
+            # 3. Test delayed deletion helper if PIN is still in cache
+            mock_bot.delete_message.reset_mock()
+            from web.api.minecraft import _cache_set
+            await _cache_set("auth:pin:timeout_user", json.dumps({"pin": "123456"}), ex=180)
+            await _cache_set("auth:pin:msg:timeout_user", "554433", ex=180)
+
+            # Run helper with 0s sleep to test timeout branch
+            from unittest.mock import patch
+            with patch("asyncio.sleep", new_callable=AsyncMock):
+                await _delete_mc_otp_message_delayed(
+                    chat_id=123456789,
+                    message_id=554433,
+                    pin_key="auth:pin:timeout_user",
+                    msg_key="auth:pin:msg:timeout_user",
+                )
+
+            mock_bot.delete_message.assert_called_with(chat_id=123456789, message_id=554433)
+            assert await _cache_get("auth:pin:timeout_user") is None
+            assert await _cache_get("auth:pin:msg:timeout_user") is None
+    finally:
+        runtime.bot = original_bot
+
+
+@pytest.mark.asyncio
+async def test_server_verify_token_endpoint(mc_db_setup):
+    """Test POST /api/server/verify-token with valid, whitelisted, and invalid tokens."""
+    session_factory = mc_db_setup
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # 1. Test missing token
+        empty_res = await ac.post("/api/server/verify-token", json={})
+        assert empty_res.status_code == 200
+        assert empty_res.json()["valid"] is False
+        assert "Session token is required" in empty_res.json()["error"]
+
+        # 2. Test invalid token
+        invalid_res = await ac.post("/api/server/verify-token", json={"token": "invalid_fake_token"})
+        assert invalid_res.status_code == 200
+        assert invalid_res.json()["valid"] is False
+        assert "Invalid or expired session token" in invalid_res.json()["error"]
+
+        # 3. Create a valid session for @steve_aitu
+        await ac.post(
+            "/api/auth/request-code",
+            json={"telegram_tag": "@steve_aitu", "minecraft_nickname": "SteveVerified"},
+        )
+        from web.api.minecraft import _cache_get
+        import json
+        pin = json.loads(await _cache_get("auth:pin:steve_aitu"))["pin"]
+        v_res = await ac.post(
+            "/api/auth/verify",
+            json={"telegram_tag": "@steve_aitu", "code": pin, "minecraft_nickname": "SteveVerified"},
+        )
+        valid_token = v_res.json()["session_token"]
+
+        # 4. Verify via JSON body
+        verify_body_res = await ac.post("/api/server/verify-token", json={"token": valid_token})
+        assert verify_body_res.status_code == 200
+        data = verify_body_res.json()
+        assert data["valid"] is True
+        assert data["telegram_id"] == 123456789
+        assert data["telegram_tag"] == "@steve_aitu"
+        assert data["minecraft_nickname"] == "SteveVerified"
+        assert data["is_whitelisted"] is True
+
+        # 5. Verify via Bearer authorization header
+        verify_header_res = await ac.post(
+            "/api/server/verify-token",
+            headers={"Authorization": f"Bearer {valid_token}"},
+        )
+        assert verify_header_res.status_code == 200
+        assert verify_header_res.json()["valid"] is True
+        assert verify_header_res.json()["telegram_id"] == 123456789
+

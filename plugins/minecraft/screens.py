@@ -143,7 +143,7 @@ def get_minecraft_code_screen(pin: str, nickname: str) -> Screen:
         f"Ваш одноразовый PIN-код:\n"
         f"<code>{pin}</code>\n\n"
         f"• Никнейм: <code>{nickname}</code>\n"
-        "• Срок действия: <b>5 минут</b>\n\n"
+        "• Срок действия: <b>3 минуты</b>\n\n"
         "<i>Откройте Minecraft с установленным модом AITU Auth и введите этот код для входа.</i>"
     )
 

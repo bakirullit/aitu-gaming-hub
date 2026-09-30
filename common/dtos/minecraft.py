@@ -75,3 +75,18 @@ class MinecraftFriendActionPayload(BaseModel):
 
 class MinecraftStatusResponse(BaseModel):
     status: str
+
+
+class MinecraftTokenVerifyPayload(BaseModel):
+    token: Optional[str] = Field(None, description="Client session token")
+    launcher_nickname: Optional[str] = Field(None, description="Optional launcher username reported by client")
+
+
+class MinecraftTokenVerifyResponse(BaseModel):
+    valid: bool
+    telegram_id: Optional[int] = None
+    telegram_tag: Optional[str] = None
+    minecraft_nickname: Optional[str] = None
+    is_whitelisted: bool = False
+    role: Optional[str] = None
+    error: Optional[str] = None

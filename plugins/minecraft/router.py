@@ -355,7 +355,7 @@ def setup_minecraft_routes(core: CoreContext) -> Router:
         # Generate secure 6-digit numeric PIN
         pin = f"{secrets.randbelow(900000) + 100000:06d}"
 
-        # Store in Redis with 5-minute TTL (matches REST API /api/auth/request-code key)
+        # Store in Redis with 3-minute TTL (matches REST API /api/auth/request-code key)
         if core.redis:
             redis_key = f"auth:pin:{clean_tag}"
             pin_data = {
@@ -364,7 +364,7 @@ def setup_minecraft_routes(core: CoreContext) -> Router:
                 "user_id": user_id,
             }
             try:
-                await core.redis.set(redis_key, json.dumps(pin_data), ex=300)
+                await core.redis.set(redis_key, json.dumps(pin_data), ex=180)
             except Exception as e:
                 logger.warning(f"Failed to set auth PIN in Redis: {e}")
 

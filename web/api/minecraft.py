@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import re
@@ -23,6 +24,8 @@ from common.dtos.minecraft import (
     MinecraftRequestCodeResponse,
     MinecraftServerInfoResponse,
     MinecraftStatusResponse,
+    MinecraftTokenVerifyPayload,
+    MinecraftTokenVerifyResponse,
     MinecraftVerifyPayload,
     MinecraftVerifyResponse,
 )
@@ -78,6 +81,22 @@ async def _cache_delete(*keys: str) -> None:
         except Exception as exc:
             logger.warning(f"Redis delete failed for {keys}: {exc}")
 
+
+async def _delete_mc_otp_message_delayed(
+    chat_id: int,
+    message_id: int,
+    pin_key: str,
+    msg_key: str,
+) -> None:
+    """Deletes the Minecraft OTP message after 180 seconds if it has not been verified."""
+    await asyncio.sleep(180)
+    if await _cache_get(pin_key) is not None:
+        if runtime.bot:
+            try:
+                await runtime.bot.delete_message(chat_id=chat_id, message_id=message_id)
+            except Exception as exc:
+                logger.debug(f"Delayed deletion of MC OTP message failed or already deleted: {exc}")
+        await _cache_delete(pin_key, msg_key)
 
 
 async def get_optional_mc_user(
@@ -161,8 +180,8 @@ async def request_code(
 ):
     """
     Request 6-digit verification PIN for Minecraft authentication.
-    Normalizes tag, finds user by telegram username, caches PIN in Redis for 5 minutes,
-    and dispatches code to user's Telegram chat.
+    Normalizes tag, finds user by telegram username, caches PIN in Redis for 3 minutes,
+    dispatches code to user's Telegram chat, and schedules deletion after 3 minutes.
     """
     clean_tag = (payload.telegram_tag or payload.tag or "").strip().lstrip("@").lower()
     if not clean_tag:
@@ -181,29 +200,53 @@ async def request_code(
             detail="User not registered in @aitu_gaming_bot. Please start the bot first.",
         )
 
+    redis_key = f"auth:pin:{clean_tag}"
+    msg_key = f"auth:pin:msg:{clean_tag}"
+
+    # Delete previous pending OTP message if user requested a new code
+    prev_msg_id = await _cache_get(msg_key)
+    if prev_msg_id and runtime.bot:
+        try:
+            await runtime.bot.delete_message(chat_id=user.telegram_id, message_id=int(prev_msg_id))
+        except Exception:
+            pass
+
     # Generate secure 6-digit numeric PIN
     pin = f"{secrets.randbelow(900000) + 100000:06d}"
 
-    # Store in Redis with 5-minute TTL
-    redis_key = f"auth:pin:{clean_tag}"
+    # Dispatch to Telegram chat via Bot
+    msg_id: Optional[int] = None
+    if runtime.bot:
+        try:
+            msg = await runtime.bot.send_message(
+                chat_id=user.telegram_id,
+                text=f"🔑 Your AITU Minecraft verification code: <b>{pin}</b>. Valid for 3 minutes.",
+                parse_mode="HTML",
+            )
+            if msg and hasattr(msg, "message_id"):
+                msg_id = msg.message_id
+        except Exception as exc:
+            logger.warning(f"Could not send Telegram PIN message to {user.telegram_id}: {exc}")
+
+    # Store in Redis / fallback cache with 3-minute TTL (180s)
     nick = (payload.minecraft_nickname or payload.mc_nick or "Player").strip()
     pin_data = {
         "pin": pin,
         "mc_nick": nick,
         "user_id": user.telegram_id,
+        "message_id": msg_id,
     }
-    await _cache_set(redis_key, json.dumps(pin_data), ex=300)
-
-    # Dispatch to Telegram chat via Bot
-    if runtime.bot:
-        try:
-            await runtime.bot.send_message(
+    await _cache_set(redis_key, json.dumps(pin_data), ex=180)
+    if msg_id:
+        await _cache_set(msg_key, str(msg_id), ex=180)
+        asyncio.create_task(
+            _delete_mc_otp_message_delayed(
                 chat_id=user.telegram_id,
-                text=f"🔑 Your AITU Minecraft verification code: <b>{pin}</b>. Valid for 5 minutes.",
-                parse_mode="HTML",
+                message_id=msg_id,
+                pin_key=redis_key,
+                msg_key=msg_key,
             )
-        except Exception as exc:
-            logger.warning(f"Could not send Telegram PIN message to {user.telegram_id}: {exc}")
+        )
 
     return MinecraftRequestCodeResponse(
         status="code_sent",
@@ -218,7 +261,7 @@ async def verify_code(
 ):
     """
     Verify 6-digit PIN, generate persistent session token, save session in DB & Redis,
-    link Minecraft nickname, and invalidate the PIN.
+    link Minecraft nickname, immediately delete the OTP message from Telegram, and invalidate the PIN.
     """
     clean_tag = (payload.telegram_tag or payload.tag or "").strip().lstrip("@").lower()
     code_val = str(payload.code if payload.code is not None else (payload.pin or "")).strip()
@@ -227,6 +270,7 @@ async def verify_code(
         raise HTTPException(status_code=400, detail="Invalid request parameters: tag and code/pin required")
 
     redis_key = f"auth:pin:{clean_tag}"
+    msg_key = f"auth:pin:msg:{clean_tag}"
 
     cached_str = await _cache_get(redis_key)
     if not cached_str:
@@ -253,6 +297,25 @@ async def verify_code(
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Delete OTP message from Telegram upon submission
+    message_id = cached_data.get("message_id")
+    if not message_id:
+        cached_msg_id = await _cache_get(msg_key)
+        if cached_msg_id:
+            try:
+                message_id = int(cached_msg_id)
+            except (ValueError, TypeError):
+                pass
+
+    if runtime.bot and message_id:
+        try:
+            await runtime.bot.delete_message(chat_id=user.telegram_id, message_id=int(message_id))
+        except Exception as exc:
+            logger.debug(f"Could not delete Telegram OTP message on verify: {exc}")
+
+    # Delete used PIN and message tracking from Redis/cache immediately
+    await _cache_delete(redis_key, msg_key)
 
     # Generate persistent cryptographically secure session token
     session_token = uuid.uuid4().hex
@@ -294,9 +357,6 @@ async def verify_code(
     }
     await _cache_set(f"mc:session:{session_token}", json.dumps(session_payload), ex=86400 * 30)
     await _cache_set(f"mc:user_session:{user.telegram_id}", session_token, ex=86400 * 30)
-
-    # Delete used PIN from Redis
-    await _cache_delete(redis_key)
 
     formatted_tag = f"@{user.username}" if user.username else f"@{clean_tag}"
     return MinecraftVerifyResponse(
@@ -345,6 +405,89 @@ async def get_server_info():
         online=online,
         max_players=max_players,
         motd=settings.MINECRAFT_SERVER_MOTD,
+    )
+
+
+@mc_server_router.post("/verify-token", response_model=MinecraftTokenVerifyResponse)
+async def verify_server_token(
+    request: Request,
+    payload: Optional[MinecraftTokenVerifyPayload] = None,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """
+    Validate a client's session token for the Minecraft server mod.
+    Verifies active session, checks whitelist status, and returns telegram ID & verified nickname.
+    """
+    token = None
+    if payload and payload.token:
+        token = payload.token.strip()
+
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+
+    if not token:
+        return MinecraftTokenVerifyResponse(
+            valid=False,
+            error="Session token is required",
+        )
+
+    # 1. Check Redis / fallback cache
+    sess_str = await _cache_get(f"mc:session:{token}")
+    user_id = None
+    cached_nick = None
+    if sess_str:
+        try:
+            sess_data = json.loads(sess_str)
+            user_id = sess_data.get("user_id")
+            cached_nick = sess_data.get("minecraft_nickname")
+        except Exception:
+            pass
+
+    # 2. Check Database if not found in cache
+    if not user_id:
+        stmt = select(MinecraftSession).where(
+            MinecraftSession.session_token == token,
+            MinecraftSession.is_active == True,
+        )
+        res = await session.execute(stmt)
+        mc_sess = res.scalar_one_or_none()
+        if mc_sess:
+            user_id = mc_sess.user_id
+            cached_nick = mc_sess.minecraft_nickname
+
+    if not user_id:
+        return MinecraftTokenVerifyResponse(
+            valid=False,
+            error="Invalid or expired session token",
+        )
+
+    # 3. Retrieve User
+    user_stmt = select(User).where(User.telegram_id == user_id)
+    user = (await session.execute(user_stmt)).scalar_one_or_none()
+    if not user:
+        return MinecraftTokenVerifyResponse(
+            valid=False,
+            error="Associated user not found",
+        )
+
+    # 4. Check Whitelist
+    wl_stmt = select(MinecraftWhitelist).where(MinecraftWhitelist.user_id == user_id)
+    wl = (await session.execute(wl_stmt)).scalar_one_or_none()
+    is_whitelisted = bool(wl and wl.is_active)
+
+    verified_nick = wl.nickname if (wl and wl.nickname) else (cached_nick or user.minecraft_nickname or "Player")
+    formatted_tag = f"@{user.username}" if user.username else f"@{verified_nick}"
+    role_str = user.role.value if hasattr(user.role, "value") else str(user.role)
+
+    return MinecraftTokenVerifyResponse(
+        valid=True,
+        telegram_id=user.telegram_id,
+        telegram_tag=formatted_tag,
+        minecraft_nickname=verified_nick,
+        is_whitelisted=is_whitelisted,
+        role=role_str,
     )
 
 
