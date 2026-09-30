@@ -305,30 +305,10 @@ def setup_minecraft_routes(core: CoreContext) -> Router:
 
         await session.commit()
 
-        # Send command to RCON with Deadline Time Budgeting
-        rcon_response = "OK"
-        if settings.MINECRAFT_RCON_PASSWORD:
-            try:
-                if old_nick and old_nick.lower() != nickname.lower():
-                    await execute_rcon_with_budget(
-                        host=settings.MINECRAFT_HOST,
-                        port=settings.MINECRAFT_RCON_PORT,
-                        password=settings.MINECRAFT_RCON_PASSWORD,
-                        command=f"whitelist remove {old_nick}",
-                        total_timeout=settings.MINECRAFT_RCON_TIMEOUT,
-                    )
-                rcon_response = await execute_rcon_with_budget(
-                    host=settings.MINECRAFT_HOST,
-                    port=settings.MINECRAFT_RCON_PORT,
-                    password=settings.MINECRAFT_RCON_PASSWORD,
-                    command=f"whitelist add {nickname}",
-                    total_timeout=settings.MINECRAFT_RCON_TIMEOUT,
-                )
-            except RCONError as exc:
-                logger.warning(f"RCON whitelist command failed for '{nickname}': {exc}")
-                rcon_response = f"Сохранено в базе данных ({exc})"
-
-        screen = get_whitelist_success_screen(nickname=nickname, rcon_response=rcon_response)
+        screen = get_whitelist_success_screen(
+            nickname=nickname,
+            rcon_response="Успешно синхронизировано в базе данных",
+        )
         await core.navigator.render(
             user_id=user_id,
             chat_id=chat_id,
@@ -415,19 +395,6 @@ def setup_minecraft_routes(core: CoreContext) -> Router:
                 await core.redis.delete(f"auth:pin:{clean_tag}", f"mc:user_session:{user_id}")
             except Exception as e:
                 logger.warning(f"Failed to delete redis session for user {user_id}: {e}")
-
-        # Send RCON command
-        if settings.MINECRAFT_RCON_PASSWORD and old_nick:
-            try:
-                await execute_rcon_with_budget(
-                    host=settings.MINECRAFT_HOST,
-                    port=settings.MINECRAFT_RCON_PORT,
-                    password=settings.MINECRAFT_RCON_PASSWORD,
-                    command=f"whitelist remove {old_nick}",
-                    total_timeout=settings.MINECRAFT_RCON_TIMEOUT,
-                )
-            except Exception as exc:
-                logger.debug(f"RCON remove failed on unlink: {exc}")
 
         await callback.answer("🔓 Аккаунт Minecraft успешно отвязан.", show_alert=True)
 

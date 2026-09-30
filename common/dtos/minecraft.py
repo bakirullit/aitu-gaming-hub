@@ -79,14 +79,20 @@ class MinecraftStatusResponse(BaseModel):
 
 class MinecraftTokenVerifyPayload(BaseModel):
     token: Optional[str] = Field(None, description="Client session token")
+    session_token: Optional[str] = Field(None, description="Alternative token field")
     launcher_nickname: Optional[str] = Field(None, description="Optional launcher username reported by client")
+    player_name: Optional[str] = Field(None, description="Player nickname alias")
+    username: Optional[str] = Field(None, description="Username alias")
 
 
 class MinecraftTokenVerifyResponse(BaseModel):
     valid: bool
+    status: Optional[str] = None
     telegram_id: Optional[int] = None
     telegram_tag: Optional[str] = None
     minecraft_nickname: Optional[str] = None
+    nickname: Optional[str] = None
+    player_name: Optional[str] = None
     is_whitelisted: bool = False
     role: Optional[str] = None
     error: Optional[str] = None

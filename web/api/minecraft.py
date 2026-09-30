@@ -408,7 +408,10 @@ async def get_server_info():
     )
 
 
-@mc_server_router.post("/verify-token", response_model=MinecraftTokenVerifyResponse)
+@mc_server_router.api_route("/verify-token", methods=["GET", "POST"], response_model=MinecraftTokenVerifyResponse)
+@mc_auth_router.api_route("/validate-token", methods=["GET", "POST"], response_model=MinecraftTokenVerifyResponse)
+@mc_auth_router.api_route("/verify-token", methods=["GET", "POST"], response_model=MinecraftTokenVerifyResponse)
+@mc_auth_router.api_route("/session/verify", methods=["GET", "POST"], response_model=MinecraftTokenVerifyResponse)
 async def verify_server_token(
     request: Request,
     payload: Optional[MinecraftTokenVerifyPayload] = None,
@@ -416,11 +419,21 @@ async def verify_server_token(
 ):
     """
     Validate a client's session token for the Minecraft server mod.
+    Accepts token via JSON body, query params (?token=...), or Authorization: Bearer header.
     Verifies active session, checks whitelist status, and returns telegram ID & verified nickname.
     """
     token = None
-    if payload and payload.token:
-        token = payload.token.strip()
+    if payload:
+        if payload.token:
+            token = payload.token.strip()
+        elif payload.session_token:
+            token = payload.session_token.strip()
+
+    if not token:
+        # Check query parameters
+        param_token = request.query_params.get("token") or request.query_params.get("session_token")
+        if param_token:
+            token = param_token.strip()
 
     if not token:
         auth_header = request.headers.get("Authorization")
@@ -428,8 +441,19 @@ async def verify_server_token(
             token = auth_header.split(" ", 1)[1].strip()
 
     if not token:
+        try:
+            body_json = await request.json()
+            if isinstance(body_json, dict):
+                raw_token = body_json.get("token") or body_json.get("session_token")
+                if raw_token:
+                    token = str(raw_token).strip()
+        except Exception:
+            pass
+
+    if not token:
         return MinecraftTokenVerifyResponse(
             valid=False,
+            status="error",
             error="Session token is required",
         )
 
@@ -460,6 +484,7 @@ async def verify_server_token(
     if not user_id:
         return MinecraftTokenVerifyResponse(
             valid=False,
+            status="error",
             error="Invalid or expired session token",
         )
 
@@ -469,6 +494,7 @@ async def verify_server_token(
     if not user:
         return MinecraftTokenVerifyResponse(
             valid=False,
+            status="error",
             error="Associated user not found",
         )
 
@@ -483,9 +509,12 @@ async def verify_server_token(
 
     return MinecraftTokenVerifyResponse(
         valid=True,
+        status="success",
         telegram_id=user.telegram_id,
         telegram_tag=formatted_tag,
         minecraft_nickname=verified_nick,
+        nickname=verified_nick,
+        player_name=verified_nick,
         is_whitelisted=is_whitelisted,
         role=role_str,
     )
