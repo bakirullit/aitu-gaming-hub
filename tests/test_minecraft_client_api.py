@@ -29,7 +29,7 @@ async def mc_db_setup():
 
     app.dependency_overrides[get_db_session] = override_get_db_session
 
-    # Populate test users
+    # Populate test users (simulating users registered and whitelisted via Telegram bot)
     async with session_factory() as session:
         user1 = User(
             telegram_id=123456789,
@@ -40,6 +40,12 @@ async def mc_db_setup():
             barcode="10001",
             role=UserRole.STUDENT,
             is_verified=True,
+            minecraft_nickname="SteveCraft",
+        )
+        wl1 = MinecraftWhitelist(
+            user_id=123456789,
+            nickname="SteveCraft",
+            is_active=True,
         )
         user2 = User(
             telegram_id=987654321,
@@ -50,8 +56,14 @@ async def mc_db_setup():
             barcode="10002",
             role=UserRole.STUDENT,
             is_verified=True,
+            minecraft_nickname="AlexPro",
         )
-        session.add_all([user1, user2])
+        wl2 = MinecraftWhitelist(
+            user_id=987654321,
+            nickname="AlexPro",
+            is_active=True,
+        )
+        session.add_all([user1, wl1, user2, wl2])
         await session.commit()
 
     yield session_factory
@@ -420,14 +432,14 @@ async def test_server_verify_token_endpoint(mc_db_setup):
         # 3. Create a valid session for @steve_aitu
         await ac.post(
             "/api/auth/request-code",
-            json={"telegram_tag": "@steve_aitu", "minecraft_nickname": "SteveVerified"},
+            json={"telegram_tag": "@steve_aitu", "minecraft_nickname": "SteveCraft"},
         )
         from web.api.minecraft import _cache_get
         import json
         pin = json.loads(await _cache_get("auth:pin:steve_aitu"))["pin"]
         v_res = await ac.post(
             "/api/auth/verify",
-            json={"telegram_tag": "@steve_aitu", "code": pin, "minecraft_nickname": "SteveVerified"},
+            json={"telegram_tag": "@steve_aitu", "code": pin, "minecraft_nickname": "SteveCraft"},
         )
         valid_token = v_res.json()["session_token"]
 
@@ -438,7 +450,7 @@ async def test_server_verify_token_endpoint(mc_db_setup):
         assert data["valid"] is True
         assert data["telegram_id"] == 123456789
         assert data["telegram_tag"] == "@steve_aitu"
-        assert data["minecraft_nickname"] == "SteveVerified"
+        assert data["minecraft_nickname"] == "SteveCraft"
         assert data["is_whitelisted"] is True
 
         # 5. Verify via Bearer authorization header
@@ -450,3 +462,277 @@ async def test_server_verify_token_endpoint(mc_db_setup):
         assert verify_header_res.json()["valid"] is True
         assert verify_header_res.json()["telegram_id"] == 123456789
 
+
+
+@pytest.mark.asyncio
+async def test_minecraft_nickname_regression_on_session_reissuance(mc_db_setup):
+    """
+    Regression test:
+    When a player logs out and logs in again using Telegram PIN verification,
+    their in-game nickname must retain their persistent database nickname (e.g. Bakirullit),
+    even if the client launcher submits a different launcher username or empty nickname.
+    """
+    session_factory = mc_db_setup
+    from sqlalchemy import select
+    from web.api.minecraft import _cache_get
+    import json
+
+    # 1. Setup persistent user in DB with nickname "Bakirullit"
+    async with session_factory() as session:
+        bak_user = User(
+            telegram_id=2100991409,
+            username="ALGORITHMs",
+            first_name="Bakir",
+            last_name="Ullit",
+            email="bakir@aitu.edu.kz",
+            barcode="10003",
+            role=UserRole.STUDENT,
+            is_verified=True,
+            minecraft_nickname="Bakirullit",
+        )
+        session.add(bak_user)
+        wl_entry = MinecraftWhitelist(
+            user_id=2100991409,
+            nickname="Bakirullit",
+            is_active=True,
+        )
+        session.add(wl_entry)
+        await session.commit()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # 2. Player logs in from client launcher, where launcher sends username "LauncherNick"
+        req_res = await ac.post(
+            "/api/auth/request-code",
+            json={"telegram_tag": "@ALGORITHMs", "minecraft_nickname": "LauncherNick"},
+        )
+        assert req_res.status_code == 200
+
+        pin_data = json.loads(await _cache_get("auth:pin:algorithms"))
+        pin = pin_data["pin"]
+
+        # 3. Client calls /api/auth/verify with PIN and launcher username "LauncherNick"
+        verify_res = await ac.post(
+            "/api/auth/verify",
+            json={
+                "telegram_tag": "@ALGORITHMs",
+                "tag": "@ALGORITHMs",
+                "pin": pin,
+                "code": pin,
+                "minecraft_nickname": "LauncherNick",
+                "mc_nick": "LauncherNick",
+            },
+        )
+        assert verify_res.status_code == 200
+        verify_json = verify_res.json()
+        assert verify_json["status"] == "success"
+        session_token = verify_json["session_token"]
+        assert session_token
+        # DB nickname MUST take precedence over launcher payload
+        assert verify_json.get("minecraft_nickname") == "Bakirullit"
+
+        # 4. Validate token via /api/server/verify-token
+        srv_res = await ac.post(
+            "/api/server/verify-token",
+            json={"token": session_token, "launcher_nickname": "LauncherNick"},
+        )
+        assert srv_res.status_code == 200
+        srv_data = srv_res.json()
+        assert srv_data["valid"] is True
+        assert srv_data["telegram_id"] == 2100991409
+        assert srv_data["telegram_tag"] == "@ALGORITHMs"
+        assert srv_data["minecraft_nickname"] == "Bakirullit"
+        assert srv_data["is_whitelisted"] is True
+        assert srv_data["role"] in ["student", "STUDENT", "player"]
+
+        # 5. Validate token via /api/auth/validate-token (alternative endpoint used by server mod)
+        val_res = await ac.post(
+            "/api/auth/validate-token",
+            json={"session_token": session_token},
+            headers={"Authorization": f"Bearer {session_token}"},
+        )
+        assert val_res.status_code == 200
+        val_data = val_res.json()
+        assert val_data["valid"] is True
+        assert val_data["telegram_id"] == 2100991409
+        assert val_data["minecraft_nickname"] == "Bakirullit"
+        assert val_data["is_whitelisted"] is True
+
+    # 6. Verify Database consistency: check that whitelist & user retain "Bakirullit"
+    async with session_factory() as session:
+        u_res = await session.execute(select(User).where(User.telegram_id == 2100991409))
+        u = u_res.scalar_one()
+        assert u.minecraft_nickname == "Bakirullit"
+
+        wl_res = await session.execute(select(MinecraftWhitelist).where(MinecraftWhitelist.user_id == 2100991409))
+        wl = wl_res.scalar_one()
+        assert wl.nickname == "Bakirullit"
+
+        sess_res = await session.execute(select(MinecraftSession).where(MinecraftSession.session_token == session_token))
+        sess = sess_res.scalar_one()
+        assert sess.minecraft_nickname == "Bakirullit"
+
+
+@pytest.mark.asyncio
+async def test_whitelist_only_persistent_nick_precedence(mc_db_setup):
+    """
+    When a player previously had their nickname in minecraft_whitelist but user.minecraft_nickname was null,
+    logging in again must adopt the whitelist nickname and sync it across tables.
+    """
+    session_factory = mc_db_setup
+    from sqlalchemy import select
+    from web.api.minecraft import _cache_get
+    import json
+
+    async with session_factory() as session:
+        user_wl = User(
+            telegram_id=555666777,
+            username="whitelisted_user",
+            email="wl@aitu.edu.kz",
+            barcode="10004",
+            role=UserRole.STUDENT,
+            is_verified=True,
+            minecraft_nickname=None,  # null in user table
+        )
+        session.add(user_wl)
+        wl = MinecraftWhitelist(
+            user_id=555666777,
+            nickname="PersistentWhitelistedNick",
+            is_active=True,
+        )
+        session.add(wl)
+        await session.commit()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        await ac.post(
+            "/api/auth/request-code",
+            json={"telegram_tag": "@whitelisted_user", "minecraft_nickname": "RandomLauncherNick"},
+        )
+        pin = json.loads(await _cache_get("auth:pin:whitelisted_user"))["pin"]
+
+        v_res = await ac.post(
+            "/api/auth/verify",
+            json={"telegram_tag": "@whitelisted_user", "code": pin, "minecraft_nickname": "RandomLauncherNick"},
+        )
+        assert v_res.status_code == 200
+        token = v_res.json()["session_token"]
+        assert v_res.json()["minecraft_nickname"] == "PersistentWhitelistedNick"
+
+        # Verify token validation returns whitelist nickname
+        val_res = await ac.post("/api/server/verify-token", json={"token": token})
+        assert val_res.status_code == 200
+        assert val_res.json()["minecraft_nickname"] == "PersistentWhitelistedNick"
+
+    async with session_factory() as session:
+        u_res = await session.execute(select(User).where(User.telegram_id == 555666777))
+        u = u_res.scalar_one()
+        # Database user is strictly readonly for launcher: remains untouched
+        assert u.minecraft_nickname is None
+        wl_res = await session.execute(select(MinecraftWhitelist).where(MinecraftWhitelist.user_id == 555666777))
+        assert wl_res.scalar_one().nickname == "PersistentWhitelistedNick"
+
+
+@pytest.mark.asyncio
+async def test_launcher_cannot_mutate_database_nickname(mc_db_setup):
+    """
+    Verify that the client launcher cannot mutate the database nickname in ANY way.
+    Nickname is strictly read-only for the launcher and changed exclusively via the Telegram bot.
+    """
+    session_factory = mc_db_setup
+    from sqlalchemy import select
+    from web.api.minecraft import _cache_get
+    import json
+
+    # 1. Existing user with persistent nickname in DB
+    async with session_factory() as session:
+        bot_user = User(
+            telegram_id=777888999,
+            username="bot_player",
+            first_name="Bot",
+            last_name="Player",
+            email="botplayer@aitu.edu.kz",
+            barcode="10009",
+            role=UserRole.STUDENT,
+            is_verified=True,
+            minecraft_nickname="BotConfiguredNick",
+        )
+        session.add(bot_user)
+        wl = MinecraftWhitelist(
+            user_id=777888999,
+            nickname="BotConfiguredNick",
+            is_active=True,
+        )
+        session.add(wl)
+        await session.commit()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        # Launcher logs in sending a completely different launcher username
+        await ac.post(
+            "/api/auth/request-code",
+            json={"telegram_tag": "@bot_player", "minecraft_nickname": "MaliciousLauncherNick"},
+        )
+        pin = json.loads(await _cache_get("auth:pin:bot_player"))["pin"]
+
+        v_res = await ac.post(
+            "/api/auth/verify",
+            json={
+                "telegram_tag": "@bot_player",
+                "code": pin,
+                "minecraft_nickname": "MaliciousLauncherNick",
+            },
+        )
+        assert v_res.status_code == 200
+        # Verify returned nickname is the bot-configured persistent nick
+        assert v_res.json()["minecraft_nickname"] == "BotConfiguredNick"
+        tok = v_res.json()["session_token"]
+
+        # Token validation must return the bot-configured persistent nick
+        val_res = await ac.post("/api/server/verify-token", json={"token": tok, "launcher_nickname": "MaliciousLauncherNick"})
+        assert val_res.status_code == 200
+        assert val_res.json()["minecraft_nickname"] == "BotConfiguredNick"
+
+    # Verify database was NOT mutated: User and Whitelist still have BotConfiguredNick
+    async with session_factory() as session:
+        u = (await session.execute(select(User).where(User.telegram_id == 777888999))).scalar_one()
+        assert u.minecraft_nickname == "BotConfiguredNick"
+        w = (await session.execute(select(MinecraftWhitelist).where(MinecraftWhitelist.user_id == 777888999))).scalar_one()
+        assert w.nickname == "BotConfiguredNick"
+
+    # 2. User without a persistent nickname in DB logs in via launcher
+    async with session_factory() as session:
+        no_nick_user = User(
+            telegram_id=333444555,
+            username="no_nick_player",
+            email="nonick@aitu.edu.kz",
+            barcode="10010",
+            role=UserRole.STUDENT,
+            is_verified=True,
+            minecraft_nickname=None,
+        )
+        session.add(no_nick_user)
+        await session.commit()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        await ac.post(
+            "/api/auth/request-code",
+            json={"telegram_tag": "@no_nick_player", "minecraft_nickname": "LauncherAttempt"},
+        )
+        pin2 = json.loads(await _cache_get("auth:pin:no_nick_player"))["pin"]
+
+        v_res2 = await ac.post(
+            "/api/auth/verify",
+            json={"telegram_tag": "@no_nick_player", "code": pin2, "minecraft_nickname": "LauncherAttempt"},
+        )
+        assert v_res2.status_code == 200
+        tok2 = v_res2.json()["session_token"]
+
+        # Server token validation shows NOT whitelisted because only the bot can whitelist / set nick
+        srv_val = await ac.post("/api/server/verify-token", json={"token": tok2})
+        assert srv_val.status_code == 200
+        assert srv_val.json()["is_whitelisted"] is False
+
+    # In database: User.minecraft_nickname is STILL None and NO MinecraftWhitelist entry was created
+    async with session_factory() as session:
+        u2 = (await session.execute(select(User).where(User.telegram_id == 333444555))).scalar_one()
+        assert u2.minecraft_nickname is None
+        w2 = (await session.execute(select(MinecraftWhitelist).where(MinecraftWhitelist.user_id == 333444555))).scalar_one_or_none()
+        assert w2 is None

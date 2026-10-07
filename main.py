@@ -34,13 +34,15 @@ app.add_middleware(
 )
 
 from web.api.router import web_router, public_router
+from web.api.v1.auth import v1_auth_router
 
 # Register Ingress Routes (/healthz, /ready, /webhook)
 register_ingress_routes(app)
 
-# Mount Web API (Admin and Public)
+# Mount Web API (Admin, Public, and V1 Services)
 app.include_router(web_router)
 app.include_router(public_router)
+app.include_router(v1_auth_router)
 
 # Mount Vue SPA Frontend
 import os

@@ -1,26 +1,32 @@
 import re
 import logging
 from aiogram import Router, F
-from aiogram.filters import CommandStart, CommandObject
+from aiogram.filters import CommandStart, Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup, default_state
-from aiogram.types import CallbackQuery, Message
-from sqlalchemy import select
+from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import HTTPException
 
-from common.enums import UserRole
 from common.models.user import User
-from common.dtos.events import UserVerifiedEvent
 from core.context import CoreContext
+from services.auth_service import AuthService
+from services.steam_service import SteamService
+from services.user_service import UserService
 from plugins.auth.screens import (
-    get_welcome_screen,
-    get_first_name_prompt_screen,
-    get_last_name_prompt_screen,
-    get_barcode_prompt_screen,
-    get_phone_prompt_screen,
-    get_email_prompt_screen,
-    get_group_prompt_screen,
-    get_verification_success_screen,
+    get_club_info_screen,
+    get_choose_role_screen,
+    get_staff_closed_screen,
+    get_full_name_screen,
+    get_phone_screen,
+    get_phone_reply_keyboard,
+    get_gmail_screen,
+    get_barcode_screen,
+    get_otp_screen,
+    get_steam_screen,
+    get_registration_cancelled_screen,
+    get_authorized_menu_screen,
     get_profile_screen,
 )
 
@@ -30,28 +36,49 @@ router = Router(name="auth_router")
 
 
 class AuthStates(StatesGroup):
-    waiting_first_name = State()
-    waiting_last_name = State()
-    waiting_barcode = State()
+    choose_role = State()
+    waiting_full_name = State()
     waiting_phone = State()
-    waiting_email = State()
-    waiting_group = State()
+    waiting_gmail = State()
+    waiting_barcode = State()
+    waiting_otp = State()
+    waiting_steam = State()
 
 
 def setup_auth_routes(core: CoreContext) -> Router:
     """Configures and binds core dependencies to the Auth router."""
 
-    # Register screen renderers in Navigator for deterministic Back navigation
     async def render_home(user_id: int, chat_id: int, payload: dict) -> any:
         async with core.db_session_factory() as session:
             stmt = select(User).where(User.telegram_id == user_id)
             res = await session.execute(stmt)
             user = res.scalar_one_or_none()
-            is_verified = user.is_verified if user else False
-            full_name = f"{user.first_name} {user.last_name}".strip() if user and user.first_name else "Студент"
-            return get_welcome_screen(is_verified=is_verified, full_name=full_name)
+
+            if user and user.full_name:
+                return get_authorized_menu_screen(
+                    full_name=user.full_name,
+                    role=user.role,
+                    is_verified=user.is_verified,
+                    has_steam=bool(user.steam_id),
+                )
+            return get_club_info_screen()
 
     core.navigator.register_screen_renderer("home", render_home)  # type: ignore
+
+    async def _clean_contact_markup(chat_id: int, state: FSMContext) -> None:
+        """Helper to remove reply keyboard if active."""
+        data = await state.get_data()
+        msg_id = data.get("phone_reply_msg_id")
+        if msg_id:
+            try:
+                await core.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+            except Exception:
+                pass
+            await state.update_data(phone_reply_msg_id=None)
+
+    # =========================================================================
+    # /start handler
+    # =========================================================================
 
     @router.message(CommandStart())
     async def cmd_start(
@@ -63,9 +90,8 @@ def setup_auth_routes(core: CoreContext) -> Router:
         await state.clear()
         user_id = message.from_user.id
         chat_id = message.chat.id
-        username = message.from_user.username
 
-        # Force menu to bottom: delete old anchor and clear its ID from Redis
+        # Clean old anchor if exists
         anchor_id = await core.navigator.get_anchor_id(user_id)
         if anchor_id:
             try:
@@ -74,351 +100,647 @@ def setup_auth_routes(core: CoreContext) -> Router:
                 pass
             await core.redis.delete(f"anchor:user:{user_id}:message_id")
 
-        # Upsert User in DB
-        stmt = select(User).where(User.telegram_id == user_id)
-        result = await session.execute(stmt)
-        user = result.scalar_one_or_none()
-
-        if user is None:
-            user = User(
-                telegram_id=user_id,
-                username=username,
-                role=UserRole.STUDENT,
-                is_verified=False,
-            )
-            session.add(user)
-            await session.commit()
-            await session.refresh(user)
-
-        # Reset history
         await core.navigator.reset_history(user_id)
 
-        # Check for tournament deep-link (e.g., /start tourn_12)
-        if command and command.args and command.args.startswith("tourn_"):
-            try:
-                tourn_id = int(command.args.split("_", 1)[1])
-                from common.models.tournament import TournamentBooking
-                from plugins.tournaments.screens import get_student_tournament_detail_screen
-
-                stmt_t = select(TournamentBooking).where(TournamentBooking.id == tourn_id)
-                res_t = await session.execute(stmt_t)
-                tournament = res_t.scalar_one_or_none()
-                if tournament:
-                    screen = get_student_tournament_detail_screen(
-                        tournament=tournament,
-                        is_verified=user.is_verified,
-                    )
-                    await core.navigator.render(
-                        user_id=user_id,
-                        chat_id=chat_id,
-                        screen=screen,
-                        screen_id=f"tourn:detail:{tourn_id}",
-                        push_to_history=True,
-                    )
-                    return
-            except Exception as exc:
-                logger.warning(f"Error processing tournament deep-link: {exc}")
-
-        # Default Welcome screen
-        full_name = f"{user.first_name} {user.last_name}".strip() if user.first_name else "Студент"
-        screen = get_welcome_screen(is_verified=user.is_verified, full_name=full_name)
-        await core.navigator.render(
-            user_id=user_id,
-            chat_id=chat_id,
-            screen=screen,
-            screen_id="home",
-            push_to_history=True,
-        )
-
-    @router.callback_query(F.data == "nav:home")
-    async def cb_home(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
-        await state.clear()
-        user_id = callback.from_user.id
-        chat_id = callback.message.chat.id
-
+        # Check user in DB
         stmt = select(User).where(User.telegram_id == user_id)
-        result = await session.execute(stmt)
-        user = result.scalar_one_or_none()
-        is_verified = user.is_verified if user else False
-        full_name = f"{user.first_name} {user.last_name}".strip() if user and user.first_name else "Студент"
+        res = await session.execute(stmt)
+        user = res.scalar_one_or_none()
 
-        screen = get_welcome_screen(is_verified=is_verified, full_name=full_name)
+        # If user is already registered (has full_name)
+        if user and user.full_name:
+            screen = get_authorized_menu_screen(
+                full_name=user.full_name,
+                role=user.role,
+                is_verified=user.is_verified,
+                has_steam=bool(user.steam_id),
+            )
+            await core.navigator.render(
+                user_id=user_id,
+                chat_id=chat_id,
+                screen=screen,
+                screen_id="home",
+                push_to_history=True,
+            )
+            return
+
+        # New user: Show Club Info Screen
+        screen = get_club_info_screen()
         await core.navigator.render(
             user_id=user_id,
             chat_id=chat_id,
             screen=screen,
-            screen_id="home",
+            screen_id="club_info",
             push_to_history=True,
         )
-        await callback.answer()
 
-    @router.callback_query(F.data == "nav:back")
-    async def cb_back(callback: CallbackQuery, state: FSMContext) -> None:
+    # =========================================================================
+    # /cancel handler
+    # =========================================================================
+
+    @router.message(Command("cancel"))
+    async def cmd_cancel(message: Message, state: FSMContext) -> None:
+        user_id = message.from_user.id
+        chat_id = message.chat.id
+        await _clean_contact_markup(chat_id, state)
         await state.clear()
-        user_id = callback.from_user.id
-        chat_id = callback.message.chat.id
-        success = await core.navigator.back(user_id=user_id, chat_id=chat_id)
-        if not success:
-            # If stack is empty, return to home
-            stmt = select(User).where(User.telegram_id == user_id)
-            async with core.db_session_factory() as session:
-                res = await session.execute(stmt)
-                user = res.scalar_one_or_none()
-                full_name = f"{user.first_name} {user.last_name}".strip() if user and user.first_name else "Студент"
-                screen = get_welcome_screen(
-                    is_verified=user.is_verified if user else False,
-                    full_name=full_name,
-                )
-                await core.navigator.render(
-                    user_id=user_id,
-                    chat_id=chat_id,
-                    screen=screen,
-                    screen_id="home",
-                    push_to_history=False,
-                )
-        await callback.answer()
 
-    @router.callback_query(F.data == "auth:start")
-    async def cb_auth_start(callback: CallbackQuery, state: FSMContext) -> None:
-        await state.set_state(AuthStates.waiting_first_name)
-        user_id = callback.from_user.id
-        chat_id = callback.message.chat.id
-        screen = get_first_name_prompt_screen()
+        screen = get_registration_cancelled_screen()
         await core.navigator.render(
             user_id=user_id,
             chat_id=chat_id,
             screen=screen,
-            screen_id="auth:first_name",
+            screen_id="reg_cancelled",
+            push_to_history=False,
+        )
+
+    @router.callback_query(F.data == "auth:cancel")
+    async def cb_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+        user_id = callback.from_user.id
+        chat_id = callback.message.chat.id
+        await _clean_contact_markup(chat_id, state)
+        await state.clear()
+
+        screen = get_registration_cancelled_screen()
+        await core.navigator.render(
+            user_id=user_id,
+            chat_id=chat_id,
+            screen=screen,
+            screen_id="reg_cancelled",
+            push_to_history=False,
+        )
+        await callback.answer("Регистрация отменена")
+
+    # =========================================================================
+    # Step 1: Click "Пройти регистрацию" -> State: CHOOSE_ROLE
+    # =========================================================================
+
+    @router.callback_query(F.data.in_(["auth:start_reg", "auth:start"]))
+    async def cb_start_registration(callback: CallbackQuery, state: FSMContext) -> None:
+        user_id = callback.from_user.id
+        chat_id = callback.message.chat.id
+        await state.clear()
+        await state.set_state(AuthStates.choose_role)
+
+        screen = get_choose_role_screen()
+        await core.navigator.render(
+            user_id=user_id,
+            chat_id=chat_id,
+            screen=screen,
+            screen_id="auth:choose_role",
             push_to_history=True,
         )
         await callback.answer()
 
-    @router.message(AuthStates.waiting_first_name)
-    async def process_first_name(message: Message, state: FSMContext) -> None:
+    # Staff role chosen -> Registration closed
+    @router.callback_query(F.data == "auth:role:staff")
+    async def cb_role_staff(callback: CallbackQuery) -> None:
+        user_id = callback.from_user.id
+        chat_id = callback.message.chat.id
+        screen = get_staff_closed_screen()
+        await core.navigator.render(
+            user_id=user_id,
+            chat_id=chat_id,
+            screen=screen,
+            screen_id="auth:staff_closed",
+            push_to_history=True,
+        )
+        await callback.answer()
+
+    # Guest or Student chosen -> State: INPUT_FULL_NAME
+    @router.callback_query(F.data.in_(["auth:role:guest", "auth:role:student"]))
+    async def cb_choose_role(callback: CallbackQuery, state: FSMContext) -> None:
+        user_id = callback.from_user.id
+        chat_id = callback.message.chat.id
+        selected_role = "student" if callback.data == "auth:role:student" else "guest"
+
+        await state.update_data(role=selected_role)
+        await state.set_state(AuthStates.waiting_full_name)
+
+        screen = get_full_name_screen()
+        await core.navigator.render(
+            user_id=user_id,
+            chat_id=chat_id,
+            screen=screen,
+            screen_id="auth:full_name",
+            push_to_history=True,
+        )
+        await callback.answer()
+
+    # =========================================================================
+    # Step 2: State: INPUT_FULL_NAME -> State: INPUT_PHONE
+    # =========================================================================
+
+    @router.message(AuthStates.waiting_full_name)
+    async def process_full_name(message: Message, state: FSMContext) -> None:
         user_id = message.from_user.id
         chat_id = message.chat.id
         raw_text = (message.text or "").strip()
 
-        if len(raw_text) < 2:
-            screen = get_first_name_prompt_screen()
-            error_screen = screen.__class__(
-                text="❌ <b>Имя слишком короткое.</b> Пожалуйста, введите настоящее Имя:\n",
-                reply_markup=screen.reply_markup,
-            )
-            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=error_screen, push_to_history=False)
-            return
-
-        await state.update_data(first_name=raw_text)
-        await state.set_state(AuthStates.waiting_last_name)
-
-        screen = get_last_name_prompt_screen(first_name=raw_text)
-        await core.navigator.render(
-            user_id=user_id, chat_id=chat_id, screen=screen, screen_id="auth:last_name", push_to_history=True
-        )
-
-    @router.message(AuthStates.waiting_last_name)
-    async def process_last_name(message: Message, state: FSMContext) -> None:
-        user_id = message.from_user.id
-        chat_id = message.chat.id
-        raw_text = (message.text or "").strip()
-
-        data = await state.get_data()
-        first_name = data.get("first_name", "")
-
-        if len(raw_text) < 2:
-            screen = get_last_name_prompt_screen(first_name=first_name)
-            error_screen = screen.__class__(
-                text=f"❌ <b>Фамилия слишком короткая.</b>\nИмя: {first_name} ✅\nПожалуйста, введите настоящую Фамилию:\n",
-                reply_markup=screen.reply_markup,
-            )
-            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=error_screen, push_to_history=False)
-            return
-
-        await state.update_data(last_name=raw_text)
-        await state.set_state(AuthStates.waiting_barcode)
-
-        screen = get_barcode_prompt_screen(first_name=first_name, last_name=raw_text)
-        await core.navigator.render(
-            user_id=user_id, chat_id=chat_id, screen=screen, screen_id="auth:barcode", push_to_history=True
-        )
-
-    @router.message(AuthStates.waiting_barcode)
-    async def process_barcode(message: Message, state: FSMContext) -> None:
-        user_id = message.from_user.id
-        chat_id = message.chat.id
-        barcode = (message.text or "").strip()
-
-        data = await state.get_data()
-        first_name = data.get("first_name", "")
-        last_name = data.get("last_name", "")
-
-        # Validation: exactly 6 digits
-        if not re.fullmatch(r"^\d{6}$", barcode):
-            screen = get_barcode_prompt_screen(first_name=first_name, last_name=last_name)
-            error_screen = screen.__class__(
+        words = raw_text.split()
+        if len(words) < 2 or not all(w.isalpha() for w in words):
+            screen = get_full_name_screen()
+            err_screen = screen.__class__(
                 text=(
-                    f"❌ <b>Некорректный формат штрих-кода!</b>\n\n"
-                    f"Штрих-код должен состоять ровно из 6 цифр.\n"
-                    "Пожалуйста, повторите ввод:"
+                    "❌ <b>Некорректный формат ФИО!</b>\n\n"
+                    "Пожалуйста, введите настоящие <b>Имя и Фамилию</b> (минимум 2 слова, только буквы):\n"
+                    "<i>Пример: Алихан Болатов</i>"
                 ),
                 reply_markup=screen.reply_markup,
             )
-            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=error_screen, push_to_history=False)
+            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
             return
 
-        await state.update_data(barcode=barcode)
+        normalized_full_name = " ".join(words)
+        await state.update_data(full_name=normalized_full_name)
         await state.set_state(AuthStates.waiting_phone)
 
-        screen = get_phone_prompt_screen(barcode=barcode)
+        # Render phone prompt
+        screen = get_phone_screen(normalized_full_name)
         await core.navigator.render(
-            user_id=user_id, chat_id=chat_id, screen=screen, screen_id="auth:phone", push_to_history=True
+            user_id=user_id,
+            chat_id=chat_id,
+            screen=screen,
+            screen_id="auth:phone",
+            push_to_history=True,
         )
+
+        # Send optional contact button
+        try:
+            contact_msg = await core.bot.send_message(
+                chat_id=chat_id,
+                text="📱 Вы можете быстро отправить номер нажатием кнопки ниже:",
+                reply_markup=get_phone_reply_keyboard(),
+            )
+            await state.update_data(phone_reply_msg_id=contact_msg.message_id)
+        except Exception:
+            pass
+
+    # =========================================================================
+    # Step 3: State: INPUT_PHONE -> State: INPUT_GMAIL
+    # =========================================================================
 
     @router.message(AuthStates.waiting_phone)
     async def process_phone(message: Message, state: FSMContext) -> None:
         user_id = message.from_user.id
         chat_id = message.chat.id
-        phone = (message.text or "").strip()
+        data = await state.get_data()
+        full_name = data.get("full_name", "")
+
+        # Extract phone
+        if message.contact and message.contact.phone_number:
+            raw_phone = message.contact.phone_number.strip()
+            clean_phone = ("+" + raw_phone.lstrip("+")).strip()
+        else:
+            raw_phone = (message.text or "").strip()
+            clean_phone = re.sub(r"[\s\-\(\)]", "", raw_phone)
+
+        # Validate E.164
+        if not re.match(r"^\+[1-9]\d{6,14}$", clean_phone):
+            screen = get_phone_screen(full_name)
+            err_screen = screen.__class__(
+                text=(
+                    f"❌ <b>Некорректный номер телефона!</b>\n\n"
+                    f"ФИО: <b>{full_name}</b> ✅\n\n"
+                    "Убедитесь, что номер указан в международном формате E.164 (например, <code>+77011234567</code>):"
+                ),
+                reply_markup=screen.reply_markup,
+            )
+            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
+            return
+
+        await _clean_contact_markup(chat_id, state)
+        await state.update_data(phone=clean_phone)
+        await state.set_state(AuthStates.waiting_gmail)
+
+        screen = get_gmail_screen(full_name=full_name, phone=clean_phone)
+        await core.navigator.render(
+            user_id=user_id,
+            chat_id=chat_id,
+            screen=screen,
+            screen_id="auth:gmail",
+            push_to_history=True,
+        )
+
+    # =========================================================================
+    # Step 4: State: INPUT_GMAIL -> Route based on selected role
+    # =========================================================================
+
+    @router.message(AuthStates.waiting_gmail)
+    async def process_gmail(message: Message, state: FSMContext) -> None:
+        user_id = message.from_user.id
+        chat_id = message.chat.id
+        data = await state.get_data()
+        full_name = data.get("full_name", "")
+        phone = data.get("phone", "")
+        role = data.get("role", "guest")
+
+        email_str = (message.text or "").strip().lower()
+
+        # Strict @gmail.com validation
+        if not re.fullmatch(r"^[a-zA-Z0-9_.+-]+@gmail\.com$", email_str):
+            screen = get_gmail_screen(full_name=full_name, phone=phone)
+            err_screen = screen.__class__(
+                text=(
+                    f"❌ <b>Некорректная почта Google!</b>\n\n"
+                    f"ФИО: <b>{full_name}</b> ✅\n"
+                    f"Телефон: <code>{phone}</code> ✅\n\n"
+                    "Пожалуйста, введите личную почту Google (домен строго <code>@gmail.com</code>):\n"
+                    "<i>Пример: student@gmail.com</i>"
+                ),
+                reply_markup=screen.reply_markup,
+            )
+            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
+            return
+
+        await state.update_data(gmail=email_str)
+
+        # Check role branch
+        if role == "student":
+            await state.set_state(AuthStates.waiting_barcode)
+            screen = get_barcode_screen(full_name=full_name)
+            await core.navigator.render(
+                user_id=user_id,
+                chat_id=chat_id,
+                screen=screen,
+                screen_id="auth:barcode",
+                push_to_history=True,
+            )
+        else:
+            # Guest branch -> INPUT_STEAM
+            await state.set_state(AuthStates.waiting_steam)
+            screen = get_steam_screen()
+            await core.navigator.render(
+                user_id=user_id,
+                chat_id=chat_id,
+                screen=screen,
+                screen_id="auth:steam",
+                push_to_history=True,
+            )
+
+    # =========================================================================
+    # Student branch: State: INPUT_BARCODE -> send OTP -> State: INPUT_OTP
+    # =========================================================================
+
+    @router.message(AuthStates.waiting_barcode)
+    async def process_barcode(message: Message, state: FSMContext, session: AsyncSession) -> None:
+        user_id = message.from_user.id
+        chat_id = message.chat.id
+        data = await state.get_data()
+        full_name = data.get("full_name", "")
+        barcode = (message.text or "").strip()
+
+        # 6 digits validation
+        if not (barcode.isdigit() and len(barcode) == 6):
+            screen = get_barcode_screen(full_name=full_name)
+            err_screen = screen.__class__(
+                text=(
+                    f"❌ <b>Некорректный формат баркода!</b>\n\n"
+                    f"Студент: <b>{full_name}</b> ✅\n\n"
+                    "Баркод должен состоять ровно из 6 цифр с вашей ID-карты (например, <code>230101</code>):"
+                ),
+                reply_markup=screen.reply_markup,
+            )
+            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
+            return
+
+        # Check barcode uniqueness
+        stmt = select(User).where(
+            or_(User.barcode == barcode, User.student_barcode == barcode),
+            User.telegram_id != user_id,
+        )
+        existing_other = (await session.execute(stmt)).scalar_one_or_none()
+        if existing_other:
+            screen = get_barcode_screen(full_name=full_name)
+            err_screen = screen.__class__(
+                text=(
+                    f"❌ <b>Баркод уже зарегистрирован!</b>\n\n"
+                    f"Баркод <code>{barcode}</code> уже привязан к другому аккаунту.\n"
+                    "Пожалуйста, проверьте данные или обратитесь в саппорт."
+                ),
+                reply_markup=screen.reply_markup,
+            )
+            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
+            return
+
+        # Dispatch OTP via AuthService
+        auth_service = AuthService(session=session, redis=core.redis, settings_obj=core.settings)
+        try:
+            await auth_service.send_student_otp(telegram_id=user_id, barcode=barcode)
+        except HTTPException as exc:
+            screen = get_barcode_screen(full_name=full_name)
+            detail = exc.detail if isinstance(exc.detail, str) else "Ошибка отправки кода"
+            err_screen = screen.__class__(
+                text=f"⚠️ <b>{detail}</b>\n\nПожалуйста, подождите или повторите ввод баркода:",
+                reply_markup=screen.reply_markup,
+            )
+            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
+            return
+
+        await state.update_data(barcode=barcode)
+        await state.set_state(AuthStates.waiting_otp)
+
+        screen = get_otp_screen(barcode=barcode)
+        await core.navigator.render(
+            user_id=user_id,
+            chat_id=chat_id,
+            screen=screen,
+            screen_id="auth:otp",
+            push_to_history=True,
+        )
+
+    # Resend OTP handler
+    @router.callback_query(F.data.startswith("auth:otp:resend"))
+    async def cb_resend_otp(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+        user_id = callback.from_user.id
+        data = await state.get_data()
+        barcode = data.get("barcode")
+        if not barcode:
+            await callback.answer("Сначала введите баркод", show_alert=True)
+            return
+
+        auth_service = AuthService(session=session, redis=core.redis, settings_obj=core.settings)
+        try:
+            await auth_service.send_student_otp(telegram_id=user_id, barcode=barcode)
+            await callback.answer("Код отправлен повторно!", show_alert=True)
+        except HTTPException as exc:
+            detail = exc.detail if isinstance(exc.detail, str) else "Подождите перед повторной отправкой"
+            await callback.answer(f"⚠️ {detail}", show_alert=True)
+
+    # Student OTP verification
+    @router.message(AuthStates.waiting_otp)
+    async def process_otp(message: Message, state: FSMContext, session: AsyncSession) -> None:
+        user_id = message.from_user.id
+        chat_id = message.chat.id
+        otp_code = (message.text or "").strip()
 
         data = await state.get_data()
         barcode = data.get("barcode", "")
-
-        # Basic phone validation (e.g. +7... or 8...)
-        if not re.fullmatch(r"^\+?\d{10,15}$", phone.replace(" ", "").replace("-", "")):
-            screen = get_phone_prompt_screen(barcode=barcode)
-            error_screen = screen.__class__(
-                text=(
-                    f"❌ <b>Некорректный формат телефона!</b>\n\n"
-                    f"Пожалуйста, введите корректный номер телефона:"
-                ),
-                reply_markup=screen.reply_markup,
-            )
-            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=error_screen, push_to_history=False)
-            return
-
-        await state.update_data(phone=phone)
-        await state.set_state(AuthStates.waiting_email)
-
-        screen = get_email_prompt_screen(phone=phone)
-        await core.navigator.render(
-            user_id=user_id, chat_id=chat_id, screen=screen, screen_id="auth:email", push_to_history=True
-        )
-
-    @router.message(AuthStates.waiting_email)
-    async def process_email(message: Message, state: FSMContext) -> None:
-        user_id = message.from_user.id
-        chat_id = message.chat.id
-        email = (message.text or "").strip()
-
-        data = await state.get_data()
+        full_name = data.get("full_name", "")
         phone = data.get("phone", "")
+        gmail = data.get("gmail", "")
 
-        # Basic email validation
-        if not re.fullmatch(r"^[\w\.\-]+@[\w\.\-]+\.\w+$", email):
-            screen = get_email_prompt_screen(phone=phone)
-            error_screen = screen.__class__(
-                text=(
-                    f"❌ <b>Некорректный формат email!</b>\n\n"
-                    f"Пожалуйста, введите корректный адрес (например: example@gmail.com):"
-                ),
-                reply_markup=screen.reply_markup,
-            )
-            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=error_screen, push_to_history=False)
-            return
+        auth_service = AuthService(session=session, redis=core.redis, settings_obj=core.settings)
+        try:
+            await auth_service.verify_student_otp(telegram_id=user_id, barcode=barcode, otp_code=otp_code)
+        except HTTPException as exc:
+            if exc.status_code == 403:
+                # 3 failed attempts: reset state
+                await state.clear()
+                screen = get_registration_cancelled_screen()
+                await core.navigator.render(
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    screen=screen,
+                    screen_id="reg_cancelled",
+                    push_to_history=False,
+                )
+                return
+            else:
+                screen = get_otp_screen(barcode=barcode)
+                detail = exc.detail if isinstance(exc.detail, str) else "Неверный код"
+                err_screen = screen.__class__(
+                    text=f"❌ <b>{detail}</b>\n\nПопробуйте ввести код еще раз:",
+                    reply_markup=screen.reply_markup,
+                )
+                await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
+                return
 
-        await state.update_data(email=email)
-        await state.set_state(AuthStates.waiting_group)
+        # Success: Write student to DB
+        parts = full_name.split(maxsplit=1)
+        first_name = parts[0]
+        last_name = parts[1] if len(parts) > 1 else ""
 
-        screen = get_group_prompt_screen(email=email)
-        await core.navigator.render(
-            user_id=user_id, chat_id=chat_id, screen=screen, screen_id="auth:group", push_to_history=True
-        )
-
-    @router.message(AuthStates.waiting_group)
-    async def process_group(message: Message, state: FSMContext, session: AsyncSession) -> None:
-        user_id = message.from_user.id
-        chat_id = message.chat.id
-        group = (message.text or "").strip().upper()
-
-        data = await state.get_data()
-        email = data.get("email", "")
-
-        # Group validation XX-YYZZ
-        if not re.fullmatch(r"^[A-Z]{2,4}-\d{4}$", group):
-            screen = get_group_prompt_screen(email=email)
-            error_screen = screen.__class__(
-                text=(
-                    f"❌ <b>Некорректный формат группы!</b>\n\n"
-                    f"Убедитесь, что формат XX-YYZZ (2-4 заглавные буквы, дефис и 4 цифры).\n"
-                    "Пожалуйста, повторите ввод:"
-                ),
-                reply_markup=screen.reply_markup,
-            )
-            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=error_screen, push_to_history=False)
-            return
-
-        data = await state.get_data()
-        first_name = data.get("first_name", "")
-        last_name = data.get("last_name", "")
-        barcode = data.get("barcode", "")
-        phone = data.get("phone", "")
-        await state.clear()
-
-        # Persist verified user in Database
         stmt = select(User).where(User.telegram_id == user_id)
-        result = await session.execute(stmt)
-        user = result.scalar_one_or_none()
+        user = (await session.execute(stmt)).scalar_one_or_none()
 
         if user:
+            user.full_name = full_name
             user.first_name = first_name
             user.last_name = last_name
-            user.barcode = barcode
             user.phone_number = phone
-            user.email = email
-            user.academic_group = group
+            user.email = gmail
+            user.barcode = barcode
+            user.role = "student"
             user.is_verified = True
-            user.role = UserRole.STUDENT
         else:
             user = User(
                 telegram_id=user_id,
                 username=message.from_user.username,
+                full_name=full_name,
                 first_name=first_name,
                 last_name=last_name,
-                barcode=barcode,
                 phone_number=phone,
-                email=email,
-                academic_group=group,
-                role=UserRole.STUDENT,
+                email=gmail,
+                barcode=barcode,
+                role="student",
                 is_verified=True,
             )
             session.add(user)
 
         await session.commit()
         await session.refresh(user)
+        await state.clear()
 
-        # Publish Domain Event to Event Bus (strictly past-tense domain fact)
-        event = UserVerifiedEvent(
-            telegram_id=user.telegram_id,
-            barcode=user.barcode,
-            first_name=user.first_name or "",
-            last_name=user.last_name or "",
-            phone_number=user.phone_number or "",
-            email=user.email or "",
-            academic_group=user.academic_group or "",
-            role=user.role,
+        # Render Main Authorized Menu
+        screen = get_authorized_menu_screen(
+            full_name=full_name,
+            role="student",
+            is_verified=True,
+            has_steam=bool(user.steam_id),
         )
-        await core.event_bus.publish(event)
-
-        # Render Success Screen
-        full_name = f"{first_name} {last_name}".strip()
-        screen = get_verification_success_screen(full_name=full_name, barcode=barcode, group=group)
         await core.navigator.render(
             user_id=user_id,
             chat_id=chat_id,
             screen=screen,
-            screen_id="auth:success",
+            screen_id="home",
             push_to_history=True,
         )
+
+    # =========================================================================
+    # Guest branch: State: INPUT_STEAM -> Save to DB -> Authorized Menu
+    # =========================================================================
+
+    @router.callback_query(F.data == "auth:steam:skip")
+    async def cb_steam_skip(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+        user_id = callback.from_user.id
+        chat_id = callback.message.chat.id
+        data = await state.get_data()
+        full_name = data.get("full_name", "")
+        phone = data.get("phone", "")
+        gmail = data.get("gmail", "")
+
+        parts = full_name.split(maxsplit=1)
+        first_name = parts[0]
+        last_name = parts[1] if len(parts) > 1 else ""
+
+        stmt = select(User).where(User.telegram_id == user_id)
+        user = (await session.execute(stmt)).scalar_one_or_none()
+
+        if user:
+            user.full_name = full_name
+            user.first_name = first_name
+            user.last_name = last_name
+            user.phone_number = phone
+            user.email = gmail
+            user.role = "guest"
+            user.is_verified = False
+        else:
+            user = User(
+                telegram_id=user_id,
+                username=callback.from_user.username,
+                full_name=full_name,
+                first_name=first_name,
+                last_name=last_name,
+                phone_number=phone,
+                email=gmail,
+                role="guest",
+                is_verified=False,
+            )
+            session.add(user)
+
+        await session.commit()
+        await session.refresh(user)
+        await state.clear()
+
+        screen = get_authorized_menu_screen(
+            full_name=full_name,
+            role="guest",
+            is_verified=False,
+            has_steam=False,
+        )
+        await core.navigator.render(
+            user_id=user_id,
+            chat_id=chat_id,
+            screen=screen,
+            screen_id="home",
+            push_to_history=True,
+        )
+        await callback.answer()
+
+    @router.message(AuthStates.waiting_steam)
+    async def process_steam(message: Message, state: FSMContext, session: AsyncSession) -> None:
+        user_id = message.from_user.id
+        chat_id = message.chat.id
+        payload_str = (message.text or "").strip()
+
+        data = await state.get_data()
+        full_name = data.get("full_name", "")
+        phone = data.get("phone", "")
+        gmail = data.get("gmail", "")
+
+        steam_service = SteamService(settings_obj=core.settings)
+        try:
+            steam_id = await steam_service.validate_and_extract_steam_id(payload_str)
+        except HTTPException as exc:
+            screen = get_steam_screen()
+            detail = exc.detail if isinstance(exc.detail, str) else "Неверный формат Steam"
+            err_screen = screen.__class__(
+                text=(
+                    f"❌ <b>{detail}</b>\n\n"
+                    "Попробуйте отправить корректную ссылку на профиль или 17-значный SteamID64, "
+                    "либо нажмите «Пропустить»:"
+                ),
+                reply_markup=screen.reply_markup,
+            )
+            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
+            return
+
+        # Check steam_id uniqueness
+        stmt_steam = select(User).where(User.steam_id == steam_id, User.telegram_id != user_id)
+        if (await session.execute(stmt_steam)).scalar_one_or_none():
+            screen = get_steam_screen()
+            err_screen = screen.__class__(
+                text=(
+                    f"❌ <b>Steam аккаунт уже привязан к другому пользователю!</b>\n\n"
+                    "Пожалуйста, укажите другой профиль или нажмите «Пропустить»:"
+                ),
+                reply_markup=screen.reply_markup,
+            )
+            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
+            return
+
+        parts = full_name.split(maxsplit=1)
+        first_name = parts[0]
+        last_name = parts[1] if len(parts) > 1 else ""
+
+        stmt = select(User).where(User.telegram_id == user_id)
+        user = (await session.execute(stmt)).scalar_one_or_none()
+
+        if user:
+            user.full_name = full_name
+            user.first_name = first_name
+            user.last_name = last_name
+            user.phone_number = phone
+            user.email = gmail
+            user.steam_id = steam_id
+            user.role = "verified_guest"
+            user.is_verified = False
+        else:
+            user = User(
+                telegram_id=user_id,
+                username=message.from_user.username,
+                full_name=full_name,
+                first_name=first_name,
+                last_name=last_name,
+                phone_number=phone,
+                email=gmail,
+                steam_id=steam_id,
+                role="verified_guest",
+                is_verified=False,
+            )
+            session.add(user)
+
+        await session.commit()
+        await session.refresh(user)
+        await state.clear()
+
+        screen = get_authorized_menu_screen(
+            full_name=full_name,
+            role="verified_guest",
+            is_verified=False,
+            has_steam=True,
+        )
+        await core.navigator.render(
+            user_id=user_id,
+            chat_id=chat_id,
+            screen=screen,
+            screen_id="home",
+            push_to_history=True,
+        )
+
+    # =========================================================================
+    # Navigation & Profile Handlers
+    # =========================================================================
+
+    @router.callback_query(F.data == "nav:home")
+    async def cb_home(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+        user_id = callback.from_user.id
+        chat_id = callback.message.chat.id
+        await _clean_contact_markup(chat_id, state)
+        await state.clear()
+
+        stmt = select(User).where(User.telegram_id == user_id)
+        user = (await session.execute(stmt)).scalar_one_or_none()
+
+        if user and user.full_name:
+            screen = get_authorized_menu_screen(
+                full_name=user.full_name,
+                role=user.role,
+                is_verified=user.is_verified,
+                has_steam=bool(user.steam_id),
+            )
+        else:
+            screen = get_club_info_screen()
+
+        await core.navigator.render(
+            user_id=user_id,
+            chat_id=chat_id,
+            screen=screen,
+            screen_id="home",
+            push_to_history=True,
+        )
+        await callback.answer()
 
     @router.callback_query(F.data == "auth:profile")
     async def cb_profile(callback: CallbackQuery, session: AsyncSession) -> None:
@@ -426,19 +748,19 @@ def setup_auth_routes(core: CoreContext) -> Router:
         chat_id = callback.message.chat.id
 
         stmt = select(User).where(User.telegram_id == user_id)
-        result = await session.execute(stmt)
-        user = result.scalar_one_or_none()
+        user = (await session.execute(stmt)).scalar_one_or_none()
 
         user_data = {
             "first_name": user.first_name if user else callback.from_user.first_name,
             "last_name": user.last_name if user else callback.from_user.last_name,
+            "full_name": user.full_name if user else None,
             "username": user.username if user else callback.from_user.username,
             "barcode": user.barcode if user else None,
             "phone_number": user.phone_number if user else None,
             "email": user.email if user else None,
-            "academic_group": user.academic_group if user else None,
+            "steam_id": user.steam_id if user else None,
             "is_verified": user.is_verified if user else False,
-            "role": user.role.value if user else "STUDENT",
+            "role": user.role if user else "guest",
         }
 
         screen = get_profile_screen(user_data)
@@ -447,6 +769,50 @@ def setup_auth_routes(core: CoreContext) -> Router:
             chat_id=chat_id,
             screen=screen,
             screen_id="auth:profile",
+            push_to_history=True,
+        )
+        await callback.answer()
+
+    # Link Steam from Profile
+    @router.callback_query(F.data == "auth:profile:link_steam")
+    async def cb_profile_link_steam(callback: CallbackQuery, state: FSMContext) -> None:
+        user_id = callback.from_user.id
+        chat_id = callback.message.chat.id
+        await state.set_state(AuthStates.waiting_steam)
+
+        screen = get_steam_screen()
+        await core.navigator.render(
+            user_id=user_id,
+            chat_id=chat_id,
+            screen=screen,
+            screen_id="auth:steam",
+            push_to_history=True,
+        )
+        await callback.answer()
+
+    # Upgrade to student from Profile
+    @router.callback_query(F.data == "auth:profile:upgrade_student")
+    async def cb_profile_upgrade_student(callback: CallbackQuery, session: AsyncSession, state: FSMContext) -> None:
+        user_id = callback.from_user.id
+        chat_id = callback.message.chat.id
+
+        stmt = select(User).where(User.telegram_id == user_id)
+        user = (await session.execute(stmt)).scalar_one_or_none()
+
+        await state.update_data(
+            full_name=user.full_name if user else "Студент",
+            phone=user.phone_number if user else "",
+            gmail=user.email if user else "",
+            role="student",
+        )
+        await state.set_state(AuthStates.waiting_barcode)
+
+        screen = get_barcode_screen(full_name=user.full_name if user else "Студент")
+        await core.navigator.render(
+            user_id=user_id,
+            chat_id=chat_id,
+            screen=screen,
+            screen_id="auth:barcode",
             push_to_history=True,
         )
         await callback.answer()
@@ -463,4 +829,3 @@ def setup_auth_routes(core: CoreContext) -> Router:
         await cmd_start(message, session, state)
 
     return router
-

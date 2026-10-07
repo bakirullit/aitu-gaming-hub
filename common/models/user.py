@@ -1,5 +1,5 @@
-from sqlalchemy import BigInteger, Enum as SQLEnum, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import BigInteger, String
+from sqlalchemy.orm import Mapped, mapped_column, synonym
 from common.database.base import Base, TimestampMixin
 from common.enums import UserRole
 
@@ -16,13 +16,18 @@ class User(Base, TimestampMixin):
     phone_number: Mapped[str | None] = mapped_column(String(32), unique=True, index=True, nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     academic_group: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    role: Mapped[UserRole] = mapped_column(
-        SQLEnum(UserRole, name="user_role_enum"),
-        default=UserRole.STUDENT,
+    role: Mapped[str] = mapped_column(
+        String(32),
+        default="guest",
         nullable=False,
     )
     is_verified: Mapped[bool] = mapped_column(default=False, nullable=False)
     minecraft_nickname: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    steam_id: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
+    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    student_barcode = synonym("barcode")
+    gmail = synonym("email")
 
     @property
     def id(self) -> int:

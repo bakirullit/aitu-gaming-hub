@@ -53,6 +53,13 @@ class Settings(BaseSettings):
     JWT_SECRET: str = Field(default="dev_secret_key_change_in_production")
     JWT_EXPIRE_HOURS: int = 12
 
+    # Email & Resend SDK
+    RESEND_API_KEY: str = Field(default="")
+    SENDER_EMAIL: str = Field(default="onboarding@resend.dev")
+
+    # Steam API
+    STEAM_API_KEY: str = Field(default="")
+
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT == "production"

@@ -31,6 +31,8 @@ class MinecraftVerifyResponse(BaseModel):
     username: str
     telegram_tag: Optional[str] = None
     tag: Optional[str] = None
+    minecraft_nickname: Optional[str] = None
+    nickname: Optional[str] = None
 
 
 class MinecraftServerInfoResponse(BaseModel):

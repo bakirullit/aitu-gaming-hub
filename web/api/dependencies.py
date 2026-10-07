@@ -55,3 +55,39 @@ async def get_current_admin(
         )
 
     return user
+
+
+async def get_redis():
+    """Dependency yielding active Redis client."""
+    from core.lifespan import runtime
+    from redis.asyncio import from_url as redis_from_url
+
+    if runtime.redis is not None:
+        yield runtime.redis
+    else:
+        client = redis_from_url(settings.REDIS_URL, decode_responses=True)
+        try:
+            yield client
+        finally:
+            await client.aclose()
+
+
+async def get_user_service(
+    session: AsyncSession = Depends(get_db_session),
+):
+    from services.user_service import UserService
+    return UserService(session=session)
+
+
+async def get_auth_service(
+    session: AsyncSession = Depends(get_db_session),
+    redis = Depends(get_redis),
+):
+    from services.auth_service import AuthService
+    return AuthService(session=session, redis=redis, settings_obj=settings)
+
+
+async def get_steam_service():
+    from services.steam_service import SteamService
+    return SteamService(settings_obj=settings)
+

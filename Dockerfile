@@ -35,6 +35,7 @@ COPY alembic.ini .
 COPY common/ ./common/
 COPY core/ ./core/
 COPY plugins/ ./plugins/
+COPY schemas/ ./schemas/
 COPY services/ ./services/
 COPY web/ ./web/
 COPY main.py .

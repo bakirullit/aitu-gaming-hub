@@ -99,6 +99,35 @@ async def _delete_mc_otp_message_delayed(
         await _cache_delete(pin_key, msg_key)
 
 
+async def get_existing_whitelist_or_session_nick(
+    session: AsyncSession,
+    user_id: int,
+) -> Optional[str]:
+    """Retrieve existing persistent nickname from whitelist or most recent session for the user."""
+    # 1. Whitelist table
+    wl_stmt = select(MinecraftWhitelist).where(MinecraftWhitelist.user_id == user_id)
+    wl = (await session.execute(wl_stmt)).scalar_one_or_none()
+    if wl and wl.nickname and wl.nickname.strip():
+        return wl.nickname.strip()
+
+    # 2. Most recent MinecraftSession
+    sess_stmt = (
+        select(MinecraftSession.minecraft_nickname)
+        .where(
+            MinecraftSession.user_id == user_id,
+            MinecraftSession.minecraft_nickname.isnot(None),
+            MinecraftSession.minecraft_nickname != "",
+        )
+        .order_by(MinecraftSession.id.desc())
+    )
+    sess_res = await session.execute(sess_stmt)
+    recent_nick = sess_res.scalars().first()
+    if recent_nick and recent_nick.strip():
+        return recent_nick.strip()
+
+    return None
+
+
 async def get_optional_mc_user(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
@@ -262,6 +291,8 @@ async def verify_code(
     """
     Verify 6-digit PIN, generate persistent session token, save session in DB & Redis,
     link Minecraft nickname, immediately delete the OTP message from Telegram, and invalidate the PIN.
+    Strictly READ-ONLY for users.minecraft_nickname and minecraft_whitelist: the launcher nickname
+    must NEVER alter or mutate the persistent database nickname. Nickname is changed solely via Telegram bot.
     """
     clean_tag = (payload.telegram_tag or payload.tag or "").strip().lstrip("@").lower()
     code_val = str(payload.code if payload.code is not None else (payload.pin or "")).strip()
@@ -284,7 +315,7 @@ async def verify_code(
     if str(cached_data.get("pin")).strip() != code_val:
         raise HTTPException(status_code=400, detail="Invalid or expired code")
 
-    # Find User
+    # 1. Fetch user by telegram_id / tag
     user_id = cached_data.get("user_id")
     user = None
     if user_id:
@@ -292,7 +323,12 @@ async def verify_code(
         user = (await session.execute(user_stmt)).scalar_one_or_none()
 
     if not user:
-        stmt = select(User).where(func.lower(User.username) == clean_tag)
+        if clean_tag.isdigit():
+            stmt = select(User).where(
+                or_(User.telegram_id == int(clean_tag), func.lower(User.username) == clean_tag)
+            )
+        else:
+            stmt = select(User).where(func.lower(User.username) == clean_tag)
         user = (await session.execute(stmt)).scalar_one_or_none()
 
     if not user:
@@ -317,33 +353,32 @@ async def verify_code(
     # Delete used PIN and message tracking from Redis/cache immediately
     await _cache_delete(redis_key, msg_key)
 
+    # 2. Check if a persistent nickname already exists in DB (strictly read-only lookup)
+    existing_nick = (
+        user.minecraft_nickname.strip()
+        if user.minecraft_nickname and user.minecraft_nickname.strip()
+        else None
+    ) or (await get_existing_whitelist_or_session_nick(session, user.telegram_id))
+
+    # 3. Resolve effective nickname: DB nickname ALWAYS takes precedence.
+    # The client launcher cannot mutate or set the persistent DB nickname.
+    client_nick = (payload.minecraft_nickname or payload.mc_nick or cached_data.get("mc_nick") or "").strip()
+    effective_nick = existing_nick if existing_nick else (client_nick or "Player")
+
+    # NOTE: user.minecraft_nickname and minecraft_whitelist are strictly READ-ONLY here.
+    # Nickname changes in the database are EXCLUSIVELY done via the Telegram bot.
+
     # Generate persistent cryptographically secure session token
     session_token = uuid.uuid4().hex
-    raw_nick = (payload.minecraft_nickname or payload.mc_nick or "").strip()
-    mc_nick = raw_nick or cached_data.get("mc_nick", "Player")
 
-    # Save session in DB
+    # 4. Create active minecraft_sessions entry for this session token
     mc_session = MinecraftSession(
         user_id=user.telegram_id,
         session_token=session_token,
-        minecraft_nickname=mc_nick,
+        minecraft_nickname=effective_nick,
         is_active=True,
     )
     session.add(mc_session)
-
-    # Upsert MinecraftWhitelist entry
-    wl_stmt = select(MinecraftWhitelist).where(MinecraftWhitelist.user_id == user.telegram_id)
-    wl_entry = (await session.execute(wl_stmt)).scalar_one_or_none()
-    if wl_entry:
-        wl_entry.nickname = mc_nick
-        wl_entry.is_active = True
-    else:
-        wl_entry = MinecraftWhitelist(
-            user_id=user.telegram_id,
-            nickname=mc_nick,
-            is_active=True,
-        )
-        session.add(wl_entry)
 
     await session.commit()
 
@@ -352,7 +387,7 @@ async def verify_code(
         "session_token": session_token,
         "user_id": user.telegram_id,
         "username": user.username or clean_tag,
-        "minecraft_nickname": mc_nick,
+        "minecraft_nickname": effective_nick,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await _cache_set(f"mc:session:{session_token}", json.dumps(session_payload), ex=86400 * 30)
@@ -367,6 +402,8 @@ async def verify_code(
         username=user.username or clean_tag,
         telegram_tag=formatted_tag,
         tag=formatted_tag,
+        minecraft_nickname=effective_nick,
+        nickname=effective_nick,
     )
 
 
@@ -421,6 +458,7 @@ async def verify_server_token(
     Validate a client's session token for the Minecraft server mod.
     Accepts token via JSON body, query params (?token=...), or Authorization: Bearer header.
     Verifies active session, checks whitelist status, and returns telegram ID & verified nickname.
+    Strictly READ-ONLY: never mutates user or whitelist nickname in the database.
     """
     token = None
     if payload:
@@ -469,16 +507,16 @@ async def verify_server_token(
         except Exception:
             pass
 
-    # 2. Check Database if not found in cache
-    if not user_id:
-        stmt = select(MinecraftSession).where(
-            MinecraftSession.session_token == token,
-            MinecraftSession.is_active == True,
-        )
-        res = await session.execute(stmt)
-        mc_sess = res.scalar_one_or_none()
-        if mc_sess:
-            user_id = mc_sess.user_id
+    # 2. Query session from database
+    stmt = select(MinecraftSession).where(
+        MinecraftSession.session_token == token,
+        MinecraftSession.is_active == True,
+    )
+    res = await session.execute(stmt)
+    mc_sess = res.scalar_one_or_none()
+    if mc_sess:
+        user_id = mc_sess.user_id
+        if not cached_nick:
             cached_nick = mc_sess.minecraft_nickname
 
     if not user_id:
@@ -498,12 +536,32 @@ async def verify_server_token(
             error="Associated user not found",
         )
 
-    # 4. Check Whitelist
+    # 4. Check Whitelist (strictly read-only)
     wl_stmt = select(MinecraftWhitelist).where(MinecraftWhitelist.user_id == user_id)
     wl = (await session.execute(wl_stmt)).scalar_one_or_none()
     is_whitelisted = bool(wl and wl.is_active)
 
-    verified_nick = wl.nickname if (wl and wl.nickname) else (cached_nick or user.minecraft_nickname or "Player")
+    # Resolve persistent nickname from DB (user.minecraft_nickname, wl.nickname, mc_sess.minecraft_nickname)
+    persistent_nick = None
+    if user.minecraft_nickname and user.minecraft_nickname.strip():
+        persistent_nick = user.minecraft_nickname.strip()
+    elif wl and wl.nickname and wl.nickname.strip():
+        persistent_nick = wl.nickname.strip()
+    elif mc_sess and mc_sess.minecraft_nickname and mc_sess.minecraft_nickname.strip():
+        persistent_nick = mc_sess.minecraft_nickname.strip()
+    elif cached_nick and cached_nick.strip():
+        persistent_nick = cached_nick.strip()
+
+    fallback_client_nick = (
+        (payload.launcher_nickname or payload.player_name or payload.username or "").strip()
+        if payload
+        else ""
+    )
+    verified_nick = persistent_nick or fallback_client_nick or (user.username if user.username else "Player")
+
+    # Strictly READ-ONLY: No DB modifications here!
+    # Database nickname is only ever changed via the Telegram bot.
+
     formatted_tag = f"@{user.username}" if user.username else f"@{verified_nick}"
     role_str = user.role.value if hasattr(user.role, "value") else str(user.role)
 
@@ -516,7 +574,7 @@ async def verify_server_token(
         nickname=verified_nick,
         player_name=verified_nick,
         is_whitelisted=is_whitelisted,
-        role=role_str,
+        role=role_str.lower() if role_str else "player",
     )
 
 
