@@ -1,4 +1,4 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 from common.dtos.screen import Screen
 from common.models.user import User
 
@@ -174,12 +174,13 @@ def get_barcode_screen(full_name: str) -> Screen:
     return Screen(text=text, reply_markup=keyboard)
 
 
-def get_otp_screen(barcode: str) -> Screen:
+def get_otp_screen(barcode: str, target_email: str | None = None) -> Screen:
     """State: INPUT_OTP - Prompt for 6-digit confirmation code."""
+    email_destination = target_email or f"{barcode}@astanait.edu.kz"
     text = (
         "🔐 <b>Введите код подтверждения из письма</b>\n\n"
-        f"Письмо с 6-значным кодом отправлено на ваш университетский адрес:\n"
-        f"<code>{barcode}@astanait.edu.kz</code>\n\n"
+        f"Письмо с 6-значным кодом отправлено на адрес:\n"
+        f"<code>{email_destination}</code>\n\n"
         "⏱ Код действителен в течение <b>5 минут</b> (до 3 попыток ввода).\n"
         "Отправьте полученный код в чат:"
     )
@@ -196,29 +197,49 @@ def get_otp_screen(barcode: str) -> Screen:
     return Screen(text=text, reply_markup=keyboard)
 
 
-def get_steam_screen() -> Screen:
-    """State: INPUT_STEAM - Prompt for Steam profile URL or raw SteamID64 with Skip button."""
+def get_steam_screen(
+    steam_auth_url: str = "",
+    is_registration: bool = True,
+    use_web_app: bool = True,
+) -> Screen:
+    """State: INPUT_STEAM - Official Steam OpenID 2.0 authorization screen via Telegram Mini App."""
     text = (
-        "🎮 <b>Привяжите Steam для верификации</b>\n\n"
+        "🎮 <b>Привязка Steam через официальный шлюз Valve</b>\n\n"
         "Привязка Steam профиля позволяет получить статус <b>Verified Guest</b> "
-        "и участвовать в открытых турнирах клуба!\n\n"
-        "Отправьте ссылку на ваш Steam профиль или SteamID64:\n"
-        "• <code>https://steamcommunity.com/id/custom_url</code>\n"
-        "• <code>https://steamcommunity.com/profiles/76561198000000000</code>\n"
-        "• Или чистый 17-значный SteamID64: <code>76561198000000000</code>\n\n"
-        "<i>Вы также можете пропустить этот шаг и привязать Steam позже.</i>"
+        "и открывает доступ к участию в турнирах клуба!\n\n"
+        "🔒 <b>Защита и безопасность:</b>\n"
+        "Авторизация происходит через официальный защищенный шлюз <b>Steam OpenID 2.0</b> прямо в интерфейсе Telegram. "
+        "Вам не нужно вводить логин или пароль в боте — подтверждение выполняется в защищенном шлюзе Valve.\n\n"
+        "<i>Нажмите кнопку ниже для безопасной привязки аккаунта:</i>"
     )
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="⏭️ Пропустить", callback_data="auth:steam:skip"),
-            ],
-            [
-                InlineKeyboardButton(text="🚫 Отмена", callback_data="auth:cancel"),
-            ],
-        ]
-    )
-    return Screen(text=text, reply_markup=keyboard)
+    buttons = []
+    if steam_auth_url:
+        if use_web_app:
+            buttons.append([
+                InlineKeyboardButton(
+                    text="🎮 Привязать Steam",
+                    web_app=WebAppInfo(url=steam_auth_url),
+                ),
+            ])
+        else:
+            buttons.append([
+                InlineKeyboardButton(
+                    text="🎮 Войти через Steam",
+                    url=steam_auth_url,
+                ),
+            ])
+
+    bottom_row = []
+    if is_registration:
+        bottom_row.append(InlineKeyboardButton(text="⏭️ Пропустить", callback_data="auth:steam:skip"))
+        bottom_row.append(InlineKeyboardButton(text="🚫 Отмена", callback_data="auth:cancel"))
+    else:
+        bottom_row.append(InlineKeyboardButton(text="◀️ В профиль", callback_data="auth:profile"))
+
+    if bottom_row:
+        buttons.append(bottom_row)
+
+    return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
 def get_registration_cancelled_screen() -> Screen:

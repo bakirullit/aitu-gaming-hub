@@ -80,6 +80,7 @@ class StudentVerifyRequest(BaseModel):
     """Request to initiate student verification by barcode."""
     telegram_id: int
     barcode: str
+    email: str | None = None
 
     @field_validator("barcode")
     @classmethod

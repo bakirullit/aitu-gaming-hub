@@ -245,6 +245,68 @@ async def test_auth_service_send_otp_success(in_mem_db_session):
 
 
 @pytest.mark.asyncio
+async def test_auth_service_send_otp_dev_routes_to_gmail(in_mem_db_session):
+    """In development/testing, OTP must be routed to the Gmail address entered during registration."""
+    mock_redis = MockRedis()
+    dev_settings = Settings(
+        ENVIRONMENT="development",
+        RESEND_API_KEY="re_test_key",
+        SENDER_EMAIL="AITU Gaming Hub <aitu-gaming@y-not-devs.com>",
+    )
+    auth_service = AuthService(
+        session=in_mem_db_session,
+        redis=mock_redis,
+        settings_obj=dev_settings,
+    )
+
+    with patch("resend.Emails.send_async", new_callable=AsyncMock) as mock_send:
+        mock_send.return_value = {"id": "email_dev"}
+        recipient = await auth_service.send_student_otp(
+            telegram_id=2001,
+            barcode="230199",
+            target_email="tester.student@gmail.com",
+        )
+
+        assert recipient == "tester.student@gmail.com"
+        mock_send.assert_awaited_once()
+        call_params = mock_send.call_args[0][0]
+        assert call_params["to"] == ["tester.student@gmail.com"]
+        assert call_params["from"] == "AITU Gaming Hub <aitu-gaming@y-not-devs.com>"
+
+
+@pytest.mark.asyncio
+async def test_auth_service_send_otp_prod_routes_to_corporate(in_mem_db_session):
+    """In production, OTP must strictly be routed to the corporate @astanait.edu.kz address."""
+    mock_redis = MockRedis()
+    prod_settings = Settings(
+        ENVIRONMENT="production",
+        RESEND_API_KEY="re_test_key",
+        SENDER_EMAIL="aitu-gaming@y-not-devs.com",
+    )
+    auth_service = AuthService(
+        session=in_mem_db_session,
+        redis=mock_redis,
+        settings_obj=prod_settings,
+    )
+
+    with patch("resend.Emails.send_async", new_callable=AsyncMock) as mock_send:
+        mock_send.return_value = {"id": "email_prod"}
+        recipient = await auth_service.send_student_otp(
+            telegram_id=2002,
+            barcode="230199",
+            target_email="tester.student@gmail.com",
+        )
+
+        # Must ignore Gmail in prod and route strictly to corporate
+        assert recipient == "230199@astanait.edu.kz"
+        mock_send.assert_awaited_once()
+        call_params = mock_send.call_args[0][0]
+        assert call_params["to"] == ["230199@astanait.edu.kz"]
+        # Normalizes raw email to friendly format
+        assert call_params["from"] == "AITU Gaming Hub <aitu-gaming@y-not-devs.com>"
+
+
+@pytest.mark.asyncio
 async def test_auth_service_rate_limiting(in_mem_db_session):
     mock_redis = MockRedis()
     custom_settings = Settings(RESEND_API_KEY="")
@@ -591,3 +653,193 @@ async def test_e2e_guest_steam_promotion(api_client):
     assert res_steam.status_code == 200
     assert res_steam.json()["role"] == "verified_guest"
     assert res_steam.json()["steam_id"] == "76561198099887766"
+
+
+@pytest.mark.asyncio
+async def test_steam_openid_login_redirect(api_client):
+    client, _, mock_redis = api_client
+    service = SteamService()
+
+    # Create a valid login state in Redis
+    state = await service.create_login_state(telegram_id=5001, redis=mock_redis)
+
+    # 1. Successful redirect to Valve OpenID gateway
+    res = await client.get(f"/api/v1/auth/steam/login?state={state}", follow_redirects=False)
+    assert res.status_code == 302
+    redirect_url = res.headers["location"]
+    assert "https://steamcommunity.com/openid/login" in redirect_url
+    assert "openid.mode=checkid_setup" in redirect_url
+    assert state in redirect_url
+
+    # 2. Unknown or expired state
+    res_bad = await client.get("/api/v1/auth/steam/login?state=nonexistent_state")
+    assert res_bad.status_code == 400
+    assert "Сессия не найдена" in res_bad.text
+
+
+@pytest.mark.asyncio
+async def test_steam_openid_callback_cancel(api_client):
+    client, _, _ = api_client
+    res = await client.get("/api/v1/auth/steam/callback?openid.mode=cancel")
+    assert res.status_code == 200
+    assert "Авторизация отменена" in res.text
+
+
+@pytest.mark.asyncio
+async def test_steam_openid_callback_full_flow(api_client):
+    client, _, mock_redis = api_client
+    service = SteamService()
+
+    # Pre-register user in DB
+    reg_payload = {
+        "telegram_id": 6001,
+        "full_name": "Дамир Сериков",
+        "phone_number": "+77051112233",
+        "gmail": "damir@gmail.com",
+    }
+    reg_res = await client.post("/api/v1/auth/register", json=reg_payload)
+    assert reg_res.status_code == 201
+
+    state = await service.create_login_state(
+        telegram_id=6001,
+        redis=mock_redis,
+        extra_data={"full_name": "Дамир Сериков"},
+    )
+
+    callback_params = {
+        "state": state,
+        "openid.mode": "id_res",
+        "openid.claimed_id": "https://steamcommunity.com/openid/id/76561198000111222",
+        "openid.identity": "https://steamcommunity.com/openid/id/76561198000111222",
+        "openid.sig": "mock_sig_value",
+    }
+
+    # Mock steam gateway check_authentication response and Web API
+    with patch("services.steam_service.httpx.AsyncClient.post") as mock_post, \
+         patch.object(SteamService, "get_player_summaries", new_callable=AsyncMock) as mock_sum, \
+         patch.object(SteamService, "get_player_bans", new_callable=AsyncMock) as mock_bans:
+
+        mock_post_resp = AsyncMock()
+        mock_post_resp.status_code = 200
+        mock_post_resp.text = "ns:http://specs.openid.net/auth/2.0\nis_valid:true\n"
+        mock_post.return_value = mock_post_resp
+
+        mock_sum.return_value = {
+            "personaname": "DamirPro",
+            "avatarfull": "https://avatars.steamstatic.com/test.jpg",
+        }
+        mock_bans.return_value = {
+            "VACBanned": False,
+            "CommunityBanned": False,
+        }
+
+        res = await client.get("/api/v1/auth/steam/callback", params=callback_params)
+        assert res.status_code == 200
+        assert "Steam успешно привязан!" in res.text
+        assert "DamirPro" in res.text
+
+    # Verify state was consumed (anti-replay)
+    assert await mock_redis.get(f"steam:state:{state}") is None
+
+    # Check user in DB was updated and promoted
+    check_res = await client.get("/api/v1/auth/check-user/6001")
+    assert check_res.status_code == 200
+    user_data = check_res.json()["user"]
+    assert user_data["steam_id"] == "76561198000111222"
+    assert user_data["role"] == "verified_guest"
+
+
+@pytest.mark.asyncio
+async def test_steam_openid_callback_duplicate_steam_id(api_client):
+    client, _, mock_redis = api_client
+    service = SteamService()
+
+    # User 1 registers and has steam_id
+    u1_reg = {
+        "telegram_id": 7001,
+        "full_name": "Игрок Первый",
+        "phone_number": "+77011111111",
+        "gmail": "p1@gmail.com",
+    }
+    res_reg1 = await client.post("/api/v1/auth/register", json=u1_reg)
+    assert res_reg1.status_code == 201
+    res_link = await client.post("/api/v1/auth/steam/link", json={"telegram_id": 7001, "steam_payload": "76561198099887766"})
+    assert res_link.status_code == 200
+
+    # User 2 tries to link the same steam_id via OpenID callback
+    u2_reg = {
+        "telegram_id": 7002,
+        "full_name": "Игрок Второй",
+        "phone_number": "+77022222222",
+        "gmail": "p2@gmail.com",
+    }
+    res_reg2 = await client.post("/api/v1/auth/register", json=u2_reg)
+    assert res_reg2.status_code == 201
+
+    state = await service.create_login_state(telegram_id=7002, redis=mock_redis)
+
+    callback_params = {
+        "state": state,
+        "openid.mode": "id_res",
+        "openid.claimed_id": "https://steamcommunity.com/openid/id/76561198099887766",
+        "openid.identity": "https://steamcommunity.com/openid/id/76561198099887766",
+    }
+
+    with patch.object(SteamService, "validate_openid_response", new_callable=AsyncMock) as mock_val:
+        mock_val.return_value = (True, "76561198099887766")
+        res = await client.get("/api/v1/auth/steam/callback", params=callback_params)
+        assert res.status_code == 409
+        assert "уже используется другим пользователем" in res.text
+
+
+@pytest.mark.asyncio
+async def test_steam_tma_bridge_page(api_client):
+    client, _, mock_redis = api_client
+    service = SteamService()
+
+    state = await service.create_login_state(telegram_id=8001, redis=mock_redis)
+
+    # Test /api/v1/auth/steam/bridge
+    res = await client.get(f"/api/v1/auth/steam/bridge?state={state}")
+    assert res.status_code == 200
+    assert "telegram.org/js/telegram-web-app.js" in res.text
+    assert "steamcommunity.com" in res.text
+    assert "SSL-сертификат" in res.text
+    assert "Войти через Steam" in res.text
+
+    # Test root alias /auth/steam/bridge
+    res_alias = await client.get(f"/auth/steam/bridge?state={state}")
+    assert res_alias.status_code == 200
+    assert "telegram.org/js/telegram-web-app.js" in res_alias.text
+
+
+@pytest.mark.asyncio
+async def test_steam_auth_status_endpoint(api_client):
+    client, _, mock_redis = api_client
+    service = SteamService()
+
+    state = await service.create_login_state(telegram_id=8002, redis=mock_redis)
+
+    # Initial status should be "pending"
+    res = await client.get(f"/api/v1/auth/steam/status?state={state}")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "pending"
+    assert data["telegram_id"] == 8002
+
+    # Update status to completed
+    await service.set_login_status(
+        state=state,
+        redis=mock_redis,
+        status_val="completed",
+        data={"steam_id": "76561198099887766", "personaname": "AITU_Player"},
+    )
+
+    res_done = await client.get(f"/api/v1/auth/steam/status?state={state}")
+    assert res_done.status_code == 200
+    done_data = res_done.json()
+    assert done_data["status"] == "completed"
+    assert done_data["steam_id"] == "76561198099887766"
+    assert done_data["personaname"] == "AITU_Player"
+
+

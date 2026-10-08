@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import secrets
 import logging
 from redis.asyncio import Redis
@@ -34,13 +36,23 @@ class AuthService:
         self.resend_api_key = settings_obj.RESEND_API_KEY
         self.sender_email = settings_obj.SENDER_EMAIL
 
-    async def send_student_otp(self, telegram_id: int, barcode: str) -> None:
+    async def send_student_otp(
+        self,
+        telegram_id: int,
+        barcode: str,
+        target_email: str | None = None,
+    ) -> str:
         """
         Sends verification OTP to student email:
         1. Checks rate limit in Redis (rate:otp:{telegram_id}).
         2. Checks whether barcode is already registered by another user in DB.
         3. Generates 6-digit cryptographic OTP and caches in Redis (otp:{barcode}, TTL=300).
-        4. Sends HTML email to {barcode}@astanait.edu.kz via Resend SDK.
+        4. Selects destination address:
+           - During testing/development (ENVIRONMENT != "production"): sends to the Gmail
+             address entered by the user during registration (target_email or user.email in DB).
+           - In production (ENVIRONMENT == "production"): sends strictly to corporate
+             email {barcode}@astanait.edu.kz.
+        5. Sends HTML email via Resend SDK with sender aitu-gaming@y-not-devs.com.
         """
         rate_key = f"rate:otp:{telegram_id}"
 
@@ -77,9 +89,25 @@ class AuthService:
         await self.redis.delete(attempts_key)
 
         # 4. Format destination address
-        recipient = f"{barcode}@astanait.edu.kz"
+        corporate_email = f"{barcode}@astanait.edu.kz"
+        if self.settings.is_production:
+            recipient = corporate_email
+        else:
+            if target_email and target_email.strip():
+                recipient = target_email.strip()
+            else:
+                stmt_user = select(User).where(User.telegram_id == telegram_id)
+                db_user = (await self.session.execute(stmt_user)).scalar_one_or_none()
+                if db_user and db_user.email and db_user.email.strip():
+                    recipient = db_user.email.strip()
+                else:
+                    recipient = corporate_email
 
         # 5. Dispatch HTML email via Resend SDK
+        sender = (self.sender_email or "AITU Gaming Hub <aitu-gaming@y-not-devs.com>").strip()
+        if "@" in sender and "<" not in sender:
+            sender = f"AITU Gaming Hub <{sender}>"
+
         html_body = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -105,13 +133,13 @@ class AuthService:
             try:
                 resend.api_key = self.resend_api_key
                 params = {
-                    "from": self.sender_email,
+                    "from": sender,
                     "to": [recipient],
                     "subject": f"AITU Gaming Hub: Код верификации {otp_code}",
                     "html": html_body,
                 }
                 await resend.Emails.send_async(params)
-                logger.info(f"Dispatched student OTP email to {recipient}")
+                logger.info(f"Dispatched student OTP email to {recipient} from {sender}")
             except Exception as exc:
                 logger.error(f"Resend SDK dispatch error to {recipient}: {exc}")
                 raise HTTPException(
@@ -122,6 +150,8 @@ class AuthService:
             logger.warning(
                 f"RESEND_API_KEY not configured. Mocking OTP dispatch of '{otp_code}' to '{recipient}'."
             )
+
+        return recipient
 
     async def verify_student_otp(self, telegram_id: int, barcode: str, otp_code: str) -> bool:
         """

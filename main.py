@@ -48,7 +48,23 @@ app.include_router(v1_auth_router)
 import os
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from fastapi import HTTPException
+from fastapi import HTTPException, Request, Depends
+from web.api.dependencies import get_redis, get_steam_service
+from web.api.v1.auth import steam_tma_bridge
+
+@app.get("/auth/steam/bridge", include_in_schema=False)
+async def auth_steam_bridge_alias(
+    request: Request,
+    state: str,
+    redis=Depends(get_redis),
+    steam_service=Depends(get_steam_service),
+):
+    return await steam_tma_bridge(
+        request=request,
+        state=state,
+        redis=redis,
+        steam_service=steam_service,
+    )
 
 dist_path = os.path.join(os.path.dirname(__file__), "web", "app", "dist")
 if os.path.exists(dist_path):
@@ -56,7 +72,13 @@ if os.path.exists(dist_path):
 
     @app.get("/{full_path:path}")
     async def serve_vue_app(full_path: str):
-        if full_path.startswith("api") or full_path.startswith("docs") or full_path.startswith("openapi.json") or full_path in ["healthz", "ready", "webhook"]:
+        if (
+            full_path.startswith("api")
+            or full_path.startswith("auth")
+            or full_path.startswith("docs")
+            or full_path.startswith("openapi.json")
+            or full_path in ["healthz", "ready", "webhook"]
+        ):
             raise HTTPException(status_code=404, detail="Not found")
         
         file_path = os.path.join(dist_path, full_path)

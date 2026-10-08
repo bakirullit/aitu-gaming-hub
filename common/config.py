@@ -1,5 +1,5 @@
 from typing import Literal
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     # Telegram Bot
     BOT_TOKEN: str = Field(default="mock_token_for_tests")
     BOT_USERNAME: str = Field(default="aitu_gaming_bot")
+    WEBAPP_URL: str = Field(default="https://aitu-gaming.y-not-devs.com")
     WEBHOOK_URL: str | None = None
     WEBHOOK_PATH: str = "/webhook"
     WEBHOOK_SECRET: str | None = None
@@ -51,11 +52,23 @@ class Settings(BaseSettings):
 
     # Web Admin Auth
     JWT_SECRET: str = Field(default="dev_secret_key_change_in_production")
+    JWT_SECRET_KEY: str | None = None
     JWT_EXPIRE_HOURS: int = 12
 
     # Email & Resend SDK
     RESEND_API_KEY: str = Field(default="")
-    SENDER_EMAIL: str = Field(default="onboarding@resend.dev")
+    SENDER_EMAIL: str = Field(default="AITU Gaming Hub <aitu-gaming@y-not-devs.com>")
+    RESEND_FROM_EMAIL: str | None = None
+
+    @model_validator(mode="after")
+    def _sync_settings(self) -> "Settings":
+        if self.JWT_SECRET_KEY and self.JWT_SECRET_KEY.strip():
+            self.JWT_SECRET = self.JWT_SECRET_KEY.strip()
+        if self.RESEND_FROM_EMAIL and self.RESEND_FROM_EMAIL.strip():
+            self.SENDER_EMAIL = self.RESEND_FROM_EMAIL.strip()
+        elif self.SENDER_EMAIL and not self.RESEND_FROM_EMAIL:
+            self.RESEND_FROM_EMAIL = self.SENDER_EMAIL.strip()
+        return self
 
     # Steam API
     STEAM_API_KEY: str = Field(default="")

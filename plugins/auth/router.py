@@ -367,9 +367,16 @@ def setup_auth_routes(core: CoreContext) -> Router:
                 push_to_history=True,
             )
         else:
-            # Guest branch -> INPUT_STEAM
+            # Guest branch -> INPUT_STEAM via OpenID 2.0
             await state.set_state(AuthStates.waiting_steam)
-            screen = get_steam_screen()
+            steam_service = SteamService(settings_obj=core.settings)
+            login_state = await steam_service.create_login_state(
+                telegram_id=user_id,
+                redis=core.redis,
+                extra_data=data,
+            )
+            steam_bridge_url = steam_service.build_bridge_url(login_state)
+            screen = get_steam_screen(steam_auth_url=steam_bridge_url, is_registration=True, use_web_app=True)
             await core.navigator.render(
                 user_id=user_id,
                 chat_id=chat_id,
@@ -426,7 +433,12 @@ def setup_auth_routes(core: CoreContext) -> Router:
         # Dispatch OTP via AuthService
         auth_service = AuthService(session=session, redis=core.redis, settings_obj=core.settings)
         try:
-            await auth_service.send_student_otp(telegram_id=user_id, barcode=barcode)
+            target_gmail = data.get("gmail")
+            recipient = await auth_service.send_student_otp(
+                telegram_id=user_id,
+                barcode=barcode,
+                target_email=target_gmail,
+            )
         except HTTPException as exc:
             screen = get_barcode_screen(full_name=full_name)
             detail = exc.detail if isinstance(exc.detail, str) else "Ошибка отправки кода"
@@ -440,7 +452,7 @@ def setup_auth_routes(core: CoreContext) -> Router:
         await state.update_data(barcode=barcode)
         await state.set_state(AuthStates.waiting_otp)
 
-        screen = get_otp_screen(barcode=barcode)
+        screen = get_otp_screen(barcode=barcode, target_email=recipient)
         await core.navigator.render(
             user_id=user_id,
             chat_id=chat_id,
@@ -455,13 +467,18 @@ def setup_auth_routes(core: CoreContext) -> Router:
         user_id = callback.from_user.id
         data = await state.get_data()
         barcode = data.get("barcode")
+        target_gmail = data.get("gmail")
         if not barcode:
             await callback.answer("Сначала введите баркод", show_alert=True)
             return
 
         auth_service = AuthService(session=session, redis=core.redis, settings_obj=core.settings)
         try:
-            await auth_service.send_student_otp(telegram_id=user_id, barcode=barcode)
+            await auth_service.send_student_otp(
+                telegram_id=user_id,
+                barcode=barcode,
+                target_email=target_gmail,
+            )
             await callback.answer("Код отправлен повторно!", show_alert=True)
         except HTTPException as exc:
             detail = exc.detail if isinstance(exc.detail, str) else "Подождите перед повторной отправкой"
@@ -497,7 +514,8 @@ def setup_auth_routes(core: CoreContext) -> Router:
                 )
                 return
             else:
-                screen = get_otp_screen(barcode=barcode)
+                target_email = gmail if not core.settings.is_production else None
+                screen = get_otp_screen(barcode=barcode, target_email=target_email)
                 detail = exc.detail if isinstance(exc.detail, str) else "Неверный код"
                 err_screen = screen.__class__(
                     text=f"❌ <b>{detail}</b>\n\nПопробуйте ввести код еще раз:",
@@ -619,95 +637,28 @@ def setup_auth_routes(core: CoreContext) -> Router:
         await callback.answer()
 
     @router.message(AuthStates.waiting_steam)
-    async def process_steam(message: Message, state: FSMContext, session: AsyncSession) -> None:
+    async def process_steam(message: Message, state: FSMContext) -> None:
         user_id = message.from_user.id
         chat_id = message.chat.id
-        payload_str = (message.text or "").strip()
-
         data = await state.get_data()
-        full_name = data.get("full_name", "")
-        phone = data.get("phone", "")
-        gmail = data.get("gmail", "")
+        is_registration = (data.get("role") != "student" and bool(data.get("full_name")))
 
         steam_service = SteamService(settings_obj=core.settings)
-        try:
-            steam_id = await steam_service.validate_and_extract_steam_id(payload_str)
-        except HTTPException as exc:
-            screen = get_steam_screen()
-            detail = exc.detail if isinstance(exc.detail, str) else "Неверный формат Steam"
-            err_screen = screen.__class__(
-                text=(
-                    f"❌ <b>{detail}</b>\n\n"
-                    "Попробуйте отправить корректную ссылку на профиль или 17-значный SteamID64, "
-                    "либо нажмите «Пропустить»:"
-                ),
-                reply_markup=screen.reply_markup,
-            )
-            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
-            return
-
-        # Check steam_id uniqueness
-        stmt_steam = select(User).where(User.steam_id == steam_id, User.telegram_id != user_id)
-        if (await session.execute(stmt_steam)).scalar_one_or_none():
-            screen = get_steam_screen()
-            err_screen = screen.__class__(
-                text=(
-                    f"❌ <b>Steam аккаунт уже привязан к другому пользователю!</b>\n\n"
-                    "Пожалуйста, укажите другой профиль или нажмите «Пропустить»:"
-                ),
-                reply_markup=screen.reply_markup,
-            )
-            await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
-            return
-
-        parts = full_name.split(maxsplit=1)
-        first_name = parts[0]
-        last_name = parts[1] if len(parts) > 1 else ""
-
-        stmt = select(User).where(User.telegram_id == user_id)
-        user = (await session.execute(stmt)).scalar_one_or_none()
-
-        if user:
-            user.full_name = full_name
-            user.first_name = first_name
-            user.last_name = last_name
-            user.phone_number = phone
-            user.email = gmail
-            user.steam_id = steam_id
-            user.role = "verified_guest"
-            user.is_verified = False
-        else:
-            user = User(
-                telegram_id=user_id,
-                username=message.from_user.username,
-                full_name=full_name,
-                first_name=first_name,
-                last_name=last_name,
-                phone_number=phone,
-                email=gmail,
-                steam_id=steam_id,
-                role="verified_guest",
-                is_verified=False,
-            )
-            session.add(user)
-
-        await session.commit()
-        await session.refresh(user)
-        await state.clear()
-
-        screen = get_authorized_menu_screen(
-            full_name=full_name,
-            role="verified_guest",
-            is_verified=False,
-            has_steam=True,
+        login_state = await steam_service.create_login_state(
+            telegram_id=user_id,
+            redis=core.redis,
+            extra_data=data,
         )
-        await core.navigator.render(
-            user_id=user_id,
-            chat_id=chat_id,
-            screen=screen,
-            screen_id="home",
-            push_to_history=True,
+        steam_bridge_url = steam_service.build_bridge_url(login_state)
+        base_screen = get_steam_screen(steam_auth_url=steam_bridge_url, is_registration=is_registration, use_web_app=True)
+        err_screen = base_screen.__class__(
+            text=(
+                "⚠️ <b>Ручной ввод Steam ID отключен!</b>\n\n"
+                "Для безопасной привязки аккаунта откройте официальный шлюз Valve по кнопке <b>«🎮 Привязать Steam»</b> ниже."
+            ),
+            reply_markup=base_screen.reply_markup,
         )
+        await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
 
     # =========================================================================
     # Navigation & Profile Handlers
@@ -780,7 +731,14 @@ def setup_auth_routes(core: CoreContext) -> Router:
         chat_id = callback.message.chat.id
         await state.set_state(AuthStates.waiting_steam)
 
-        screen = get_steam_screen()
+        steam_service = SteamService(settings_obj=core.settings)
+        login_state = await steam_service.create_login_state(
+            telegram_id=user_id,
+            redis=core.redis,
+            extra_data={"is_profile_link": True},
+        )
+        steam_bridge_url = steam_service.build_bridge_url(login_state)
+        screen = get_steam_screen(steam_auth_url=steam_bridge_url, is_registration=False, use_web_app=True)
         await core.navigator.render(
             user_id=user_id,
             chat_id=chat_id,
