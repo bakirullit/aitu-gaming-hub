@@ -42,6 +42,8 @@ def serialize_tournament(booking: TournamentBooking, bot_username: str) -> Tourn
     if booking.creator:
         full = f"{booking.creator.first_name or ''} {booking.creator.last_name or ''}".strip()
         creator_name = full or (f"@{booking.creator.username}" if booking.creator.username else "AITU Esports")
+    elif getattr(booking, "creator_steam_id", None):
+        creator_name = f"Steam [{booking.creator_steam_id}]"
     else:
         creator_name = "AITU Esports"
 

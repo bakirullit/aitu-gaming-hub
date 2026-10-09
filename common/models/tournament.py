@@ -37,11 +37,16 @@ class TournamentBooking(Base, TimestampMixin):
     __tablename__ = "tournament_bookings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    creator_id: Mapped[int] = mapped_column(
+    creator_id: Mapped[int | None] = mapped_column(
         BigInteger,
-        ForeignKey("users.telegram_id", ondelete="CASCADE"),
+        ForeignKey("users.telegram_id", ondelete="SET NULL"),
         index=True,
-        nullable=False,
+        nullable=True,
+    )
+    creator_steam_id: Mapped[str | None] = mapped_column(
+        String(64),
+        index=True,
+        nullable=True,
     )
     discipline: Mapped[DisciplineType] = mapped_column(
         SQLEnum(DisciplineType, name="discipline_type_enum"),
@@ -62,7 +67,7 @@ class TournamentBooking(Base, TimestampMixin):
     )
     approval_msg_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
-    creator: Mapped["User"] = relationship("User", backref="tournament_bookings")  # type: ignore # noqa: F821
+    creator: Mapped["User | None"] = relationship("User", backref="tournament_bookings")  # type: ignore # noqa: F821
 
     def __repr__(self) -> str:
         return (

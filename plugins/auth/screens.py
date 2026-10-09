@@ -339,8 +339,65 @@ def get_profile_screen(user_data: dict) -> Screen:
         buttons.append([InlineKeyboardButton(text="🎮 Привязать Steam", callback_data="auth:profile:link_steam")])
     if role_val in ["guest", "verified_guest"]:
         buttons.append([InlineKeyboardButton(text="🎓 Верифицировать студента AITU", callback_data="auth:profile:upgrade_student")])
+    buttons.append([InlineKeyboardButton(text="🗑️ Удалить аккаунт", callback_data="auth:profile:delete_account")])
     buttons.append([InlineKeyboardButton(text="◀️ В главное меню", callback_data="nav:home")])
 
+    return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+
+
+def get_delete_account_confirm_screen(steam_id: str | None = None) -> Screen:
+    """Confirmation screen before permanent account deletion."""
+    steam_info = (
+        f"• <b>Записи и история турниров останутся сохранены за вашим Steam ID:</b> <code>{steam_id}</code>\n"
+        if steam_id
+        else "• <i>Steam ID не был привязан (турнирные записи останутся анонимными).</i>\n"
+    )
+    text = (
+        "⚠️ <b>Подтверждение удаления аккаунта</b>\n\n"
+        "Вы действительно хотите удалить свой профиль в <b>AITU Gaming Hub</b>?\n\n"
+        "• Все личные данные (ФИО, телефон, почта, баркод) будут безвозвратно стерты.\n"
+        f"{steam_info}"
+        "• Привязка к Telegram удалится — вы сможете зарегистрироваться заново в любое время.\n\n"
+        "<b>Внимание:</b> Это действие необратимо!"
+    )
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text="🔥 Да, удалить навсегда",
+                callback_data="auth:profile:delete_account:confirm",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="◀️ Отмена",
+                callback_data="auth:profile",
+            ),
+        ],
+    ]
+    return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+
+
+def get_account_deleted_screen(steam_id: str | None = None) -> Screen:
+    """Screen displayed after account has been deleted."""
+    steam_info = (
+        f"Все записи ваших турниров сохранены за Steam ID: <code>{steam_id}</code>.\n\n"
+        if steam_id
+        else ""
+    )
+    text = (
+        "🗑️ <b>Ваш аккаунт успешно удален</b>\n\n"
+        "Все персональные данные были удалены из системы.\n"
+        f"{steam_info}"
+        "Если вы захотите вернуться, нажмите кнопку регистрации ниже 👇"
+    )
+    buttons = [
+        [
+            InlineKeyboardButton(text="📝 Зарегистрироваться", callback_data="auth:start_reg"),
+        ],
+        [
+            InlineKeyboardButton(text="ℹ️ О клубе", callback_data="auth:club_info"),
+        ],
+    ]
     return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 

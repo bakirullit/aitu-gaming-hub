@@ -843,3 +843,104 @@ async def test_steam_auth_status_endpoint(api_client):
     assert done_data["personaname"] == "AITU_Player"
 
 
+@pytest.mark.asyncio
+async def test_delete_account_preserves_tournaments_on_steam_id(api_client):
+    client, session_factory, _ = api_client
+    from common.models.tournament import TournamentBooking
+    from common.enums import DisciplineType, TournamentStatus
+    from datetime import date
+
+    # 1. Register a user
+    user_payload = {
+        "telegram_id": 9001,
+        "full_name": "Ерлан Омаров",
+        "phone_number": "+77073334455",
+        "gmail": "erlan@gmail.com",
+    }
+    reg_res = await client.post("/api/v1/auth/register", json=user_payload)
+    assert reg_res.status_code == 201
+
+    # 2. Link Steam ID
+    steam_res = await client.post(
+        "/api/v1/auth/steam/link",
+        json={"telegram_id": 9001, "steam_payload": "76561198099887766"},
+    )
+    assert steam_res.status_code == 200
+
+    # 3. Create a tournament booking for this user
+    async with session_factory() as session:
+        booking = TournamentBooking(
+            creator_id=9001,
+            creator_steam_id="76561198099887766",
+            discipline=DisciplineType.CS2,
+            title="AITU CS2 Cup",
+            booking_date=date.today(),
+            event_format="online_single_elim_5x5",
+            status=TournamentStatus.APPROVED,
+        )
+        session.add(booking)
+        await session.commit()
+        booking_id = booking.id
+
+    # 4. Delete user account via API
+    del_res = await client.delete("/api/v1/auth/user/9001")
+    assert del_res.status_code == 200
+    data = del_res.json()
+    assert data["deleted"] is True
+    assert data["steam_id"] == "76561198099887766"
+
+    # 5. Verify user is removed
+    check_res = await client.get("/api/v1/auth/check-user/9001")
+    assert check_res.status_code == 200
+    assert check_res.json()["exists"] is False
+
+    # 6. Verify tournament booking still exists and is attached to creator_steam_id
+    async with session_factory() as session:
+        from sqlalchemy import select
+        stmt = select(TournamentBooking).where(TournamentBooking.id == booking_id)
+        saved_booking = (await session.execute(stmt)).scalar_one_or_none()
+        assert saved_booking is not None
+        assert saved_booking.creator_id is None
+        assert saved_booking.creator_steam_id == "76561198099887766"
+
+
+def test_delete_account_screens_rendering():
+    from plugins.auth.screens import (
+        get_profile_screen,
+        get_delete_account_confirm_screen,
+        get_account_deleted_screen,
+    )
+
+    # 1. Profile screen includes delete button
+    profile_screen = get_profile_screen({
+        "full_name": "Тест Игрок",
+        "steam_id": "76561198099887766",
+        "role": "verified_guest",
+    })
+    button_texts = [
+        btn.text
+        for row in profile_screen.reply_markup.inline_keyboard
+        for btn in row
+    ]
+    assert "🗑️ Удалить аккаунт" in button_texts
+
+    # 2. Confirmation screen displays Steam ID
+    confirm_screen = get_delete_account_confirm_screen(steam_id="76561198099887766")
+    assert "76561198099887766" in confirm_screen.text
+    assert "🔥 Да, удалить навсегда" in [
+        btn.text
+        for row in confirm_screen.reply_markup.inline_keyboard
+        for btn in row
+    ]
+
+    # 3. Deleted screen
+    deleted_screen = get_account_deleted_screen(steam_id="76561198099887766")
+    assert "76561198099887766" in deleted_screen.text
+    assert "📝 Зарегистрироваться" in [
+        btn.text
+        for row in deleted_screen.reply_markup.inline_keyboard
+        for btn in row
+    ]
+
+
+

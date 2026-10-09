@@ -336,6 +336,14 @@ async def steam_openid_callback(
         )
         session.add(user)
 
+    from common.models.tournament import TournamentBooking
+    from sqlalchemy import update
+    await session.execute(
+        update(TournamentBooking)
+        .where(TournamentBooking.creator_id == telegram_id)
+        .values(creator_steam_id=steam_id)
+    )
+
     await session.commit()
     await session.refresh(user)
 
@@ -475,3 +483,26 @@ async def steam_tma_bridge(
         bot_username=settings.BOT_USERNAME,
     )
     return HTMLResponse(content=html, status_code=status.HTTP_200_OK)
+
+
+@v1_auth_router.delete(
+    "/user/{telegram_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Delete user account while preserving tournament records under Steam ID",
+)
+async def delete_user(
+    telegram_id: int,
+    user_service: UserService = Depends(get_user_service),
+) -> dict[str, Any]:
+    """
+    Deletes the user profile permanently from the database.
+    Tournament booking records are detached from the Telegram user and preserved
+    under the player's Steam ID.
+    """
+    res = await user_service.delete_user_account(telegram_id=telegram_id)
+    if not res:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User {telegram_id} not found.",
+        )
+    return res

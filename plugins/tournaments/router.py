@@ -482,9 +482,15 @@ def setup_tournaments_routes(core: CoreContext) -> Router:
         booking_date_raw = data.get("booking_date")
         b_date = date.fromisoformat(booking_date_raw) if booking_date_raw else date.today()
 
+        # Lookup creator user for notification & admin card
+        u_stmt = select(User).where(User.telegram_id == user_id)
+        u_res = await session.execute(u_stmt)
+        creator_user = u_res.scalar_one_or_none() or User(telegram_id=user_id)
+
         # Create booking in DB
         booking = TournamentBooking(
             creator_id=user_id,
+            creator_steam_id=creator_user.steam_id if creator_user else None,
             discipline=DisciplineType(data.get("discipline", "CS2")),
             title=data.get("title", "Турнир"),
             booking_date=b_date,
@@ -496,11 +502,6 @@ def setup_tournaments_routes(core: CoreContext) -> Router:
         session.add(booking)
         await session.commit()
         await session.refresh(booking)
-
-        # Lookup creator user for notification & admin card
-        u_stmt = select(User).where(User.telegram_id == user_id)
-        u_res = await session.execute(u_stmt)
-        creator_user = u_res.scalar_one_or_none() or User(telegram_id=user_id)
 
         # Forward to Head Admin Topic / Management Chat
         admin_chat_id = core.settings.TOURNAMENT_ADMIN_CHAT_ID or core.settings.HELPDESK_ADMIN_CHAT_ID

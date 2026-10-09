@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import logging
+from typing import Any
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
@@ -155,7 +158,50 @@ class UserService:
         if current_role == UserRole.guest.value:
             user.role = UserRole.verified_guest.value
 
+        from common.models.tournament import TournamentBooking
+        from sqlalchemy import update
+        await self.session.execute(
+            update(TournamentBooking)
+            .where(TournamentBooking.creator_id == telegram_id)
+            .values(creator_steam_id=steam_id)
+        )
+
         await self.session.commit()
         await self.session.refresh(user)
         logger.info(f"Linked steam_id={steam_id} to user telegram_id={telegram_id}, new role={user.role}")
         return user
+
+    async def delete_user_account(self, telegram_id: int) -> dict[str, Any] | None:
+        """
+        Deletes the user account permanently while preserving their tournament records
+        linked to their Steam ID.
+        """
+        user = await self.get_by_telegram_id(telegram_id)
+        if not user:
+            return None
+
+        steam_id = user.steam_id
+
+        # 1. Preserve tournament bookings on their Steam ID and detach creator_id
+        from common.models.tournament import TournamentBooking
+        from sqlalchemy import update
+        await self.session.execute(
+            update(TournamentBooking)
+            .where(TournamentBooking.creator_id == telegram_id)
+            .values(creator_steam_id=steam_id, creator_id=None)
+        )
+
+        # 2. Delete user entity (cascades to tickets, discipline_admins, whitelist)
+        await self.session.delete(user)
+        await self.session.commit()
+        logger.info(
+            f"Permanently deleted user telegram_id={telegram_id}, "
+            f"tournaments preserved for steam_id={steam_id}"
+        )
+
+        return {
+            "deleted": True,
+            "telegram_id": telegram_id,
+            "steam_id": steam_id,
+        }
+

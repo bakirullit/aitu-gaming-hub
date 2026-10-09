@@ -28,6 +28,8 @@ from plugins.auth.screens import (
     get_registration_cancelled_screen,
     get_authorized_menu_screen,
     get_profile_screen,
+    get_delete_account_confirm_screen,
+    get_account_deleted_screen,
 )
 
 logger = logging.getLogger("plugins.auth.router")
@@ -774,6 +776,64 @@ def setup_auth_routes(core: CoreContext) -> Router:
             push_to_history=True,
         )
         await callback.answer()
+
+    # Delete account from profile (confirmation prompt)
+    @router.callback_query(F.data == "auth:profile:delete_account")
+    async def cb_profile_delete_account(callback: CallbackQuery, session: AsyncSession) -> None:
+        user_id = callback.from_user.id
+        chat_id = callback.message.chat.id
+
+        stmt = select(User).where(User.telegram_id == user_id)
+        user = (await session.execute(stmt)).scalar_one_or_none()
+        steam_id = user.steam_id if user else None
+
+        screen = get_delete_account_confirm_screen(steam_id=steam_id)
+        await core.navigator.render(
+            user_id=user_id,
+            chat_id=chat_id,
+            screen=screen,
+            screen_id="auth:delete_confirm",
+            push_to_history=True,
+        )
+        await callback.answer()
+
+    # Confirm permanent account deletion
+    @router.callback_query(F.data == "auth:profile:delete_account:confirm")
+    async def cb_profile_delete_account_confirm(
+        callback: CallbackQuery, session: AsyncSession, state: FSMContext
+    ) -> None:
+        user_id = callback.from_user.id
+        chat_id = callback.message.chat.id
+
+        user_service = UserService(session=session)
+        result = await user_service.delete_user_account(telegram_id=user_id)
+        steam_id = result.get("steam_id") if result else None
+
+        # Clean FSM state and Redis keys for this user
+        await state.clear()
+        try:
+            fsm_pattern = f"fsm:*:{user_id}:{user_id}:*"
+            keys = await core.redis.keys(fsm_pattern)
+            if keys:
+                await core.redis.delete(*keys)
+        except Exception:
+            pass
+
+        # Reset navigator history stack
+        try:
+            await core.navigator.reset_history(user_id)
+        except Exception:
+            pass
+
+        screen = get_account_deleted_screen(steam_id=steam_id)
+        await core.navigator.render(
+            user_id=user_id,
+            chat_id=chat_id,
+            screen=screen,
+            screen_id="auth:deleted",
+            push_to_history=False,
+        )
+        await callback.answer("Аккаунт успешно удален", show_alert=True)
 
     @router.message(F.chat.type == "private", default_state)
     async def fallback_handler(message: Message, session: AsyncSession, state: FSMContext) -> None:
