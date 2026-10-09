@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import Admin from '../views/Admin.vue'
+import Chats from '../views/Chats.vue'
 import Disciplines from '../views/Disciplines.vue'
 import Login from '../views/Login.vue'
 import Tournaments from '../views/Tournaments.vue'
@@ -18,6 +19,11 @@ const routes = [
   { 
     path: '/admin/disciplines', 
     component: Disciplines,
+    meta: { requiresAuth: true }
+  },
+  { 
+    path: '/admin/chats', 
+    component: Chats,
     meta: { requiresAuth: true }
   },
 ]

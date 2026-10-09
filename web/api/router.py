@@ -10,6 +10,7 @@ from common.dtos.web import UserResponse, PaginatedUsersResponse, RoleUpdateRequ
 from web.api.dependencies import get_current_admin, get_db_session
 from web.api.auth import auth_router
 from web.api.disciplines import disciplines_router
+from web.api.chats import chats_router
 from web.api.tournaments import tournaments_router
 from web.api.minecraft import (
     minecraft_router,
@@ -23,6 +24,7 @@ from core.lifespan import runtime
 web_router = APIRouter(prefix="/api/admin", redirect_slashes=False)
 web_router.include_router(auth_router)
 web_router.include_router(disciplines_router)
+web_router.include_router(chats_router)
 
 # Public router (/api/*) - accessible without auth / client endpoints
 public_router = APIRouter(prefix="/api", redirect_slashes=False)

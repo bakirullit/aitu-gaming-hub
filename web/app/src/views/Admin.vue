@@ -12,6 +12,7 @@
             <router-link to="/tournaments" class="nav-item">Tournaments</router-link>
             <router-link to="/admin" class="nav-item active">Members</router-link>
             <router-link to="/admin/disciplines" class="nav-item">Disciplines</router-link>
+            <router-link to="/admin/chats" class="nav-item">Telegram Chats</router-link>
           </nav>
         </div>
         <div class="header-right">

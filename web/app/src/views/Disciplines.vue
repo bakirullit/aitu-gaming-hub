@@ -12,6 +12,7 @@
             <router-link to="/tournaments" class="nav-item">Tournaments</router-link>
             <router-link to="/admin" class="nav-item">Members</router-link>
             <router-link to="/admin/disciplines" class="nav-item active">Disciplines</router-link>
+            <router-link to="/admin/chats" class="nav-item">Telegram Chats</router-link>
           </nav>
         </div>
         <div class="header-right">
@@ -177,14 +178,33 @@
                 </select>
               </div>
               <div class="form-group">
-                <label>Telegram Chat Link</label>
-                <input 
-                  v-model="form.chat_url" 
-                  type="url" 
-                  required 
-                  placeholder="https://t.me/..."
-                  class="form-input"
-                />
+                <label>Telegram Chat</label>
+                <div class="chat-select-wrap">
+                  <select 
+                    v-model="form.selected_chat" 
+                    @change="onChatSelectChange" 
+                    class="form-input"
+                  >
+                    <option :value="null">— Choose Synced Chat —</option>
+                    <option 
+                      v-for="c in availableChats" 
+                      :key="c.chat_id" 
+                      :value="c.chat_id"
+                    >
+                      {{ getChatIcon(c.chat_type) }} {{ c.title }} (ID: {{ c.chat_id }})
+                    </option>
+                    <option value="__custom__">✏️ Manual Input (Custom ID / Link)</option>
+                  </select>
+
+                  <input 
+                    v-if="form.selected_chat === '__custom__' || isCustomChat" 
+                    v-model="form.custom_chat" 
+                    @input="onCustomChatInput"
+                    type="text" 
+                    placeholder="Enter Chat ID (-100...) or https://t.me/... link" 
+                    class="form-input manual-chat-input"
+                  />
+                </div>
               </div>
             </div>
 
@@ -236,13 +256,15 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { disciplineApi, userApi } from '../services/api'
+import { disciplineApi, userApi, chatApi } from '../services/api'
 import GameLogo from '../components/GameLogo.vue'
 
 const router = useRouter()
 const currentUser = ref(null)
 const disciplines = ref([])
 const eligibleUsers = ref([])
+const availableChats = ref([])
+const isCustomChat = ref(false)
 const loading = ref(false)
 const modalSaving = ref(false)
 const searchQuery = ref('')
@@ -260,9 +282,63 @@ const form = ref({
   tier: 'medium',
   description: '',
   chat_url: '',
+  chat_id: null,
+  selected_chat: null,
+  custom_chat: '',
   admin_id: null,
   is_active: true,
 })
+
+function getChatIcon(type) {
+  switch (type) {
+    case 'channel': return '📢'
+    case 'supergroup': return '👥'
+    case 'group': return '💬'
+    default: return '💬'
+  }
+}
+
+async function fetchAvailableChats() {
+  try {
+    const res = await chatApi.getChats({ active_only: true })
+    availableChats.value = res.data || []
+  } catch (err) {
+    console.error('Failed to fetch available chats:', err)
+    availableChats.value = []
+  }
+}
+
+function onChatSelectChange() {
+  if (form.value.selected_chat === '__custom__') {
+    isCustomChat.value = true
+    form.value.chat_id = null
+  } else if (form.value.selected_chat != null) {
+    isCustomChat.value = false
+    const cid = form.value.selected_chat
+    const chatObj = availableChats.value.find(c => c.chat_id === cid)
+    form.value.chat_id = cid
+    if (chatObj) {
+      form.value.chat_url = chatObj.username 
+        ? `https://t.me/${chatObj.username}` 
+        : `https://t.me/c/${String(chatObj.chat_id).replace('-100', '')}`
+    }
+  } else {
+    isCustomChat.value = false
+    form.value.chat_id = null
+    form.value.chat_url = ''
+  }
+}
+
+function onCustomChatInput() {
+  const val = (form.value.custom_chat || '').trim()
+  if (val.startsWith('-') || /^\d+$/.test(val)) {
+    form.value.chat_id = parseInt(val, 10)
+    form.value.chat_url = `https://t.me/c/${val.replace('-100', '')}`
+  } else {
+    form.value.chat_url = val
+    form.value.chat_id = null
+  }
+}
 
 const filteredDisciplines = computed(() => {
   if (!searchQuery.value.trim()) return disciplines.value
@@ -311,12 +387,16 @@ async function fetchEligibleUsers() {
 
 function openCreateModal() {
   isEditing.value = false
+  isCustomChat.value = false
   form.value = {
     slug: '',
     name: '',
     tier: 'medium',
     description: '',
     chat_url: '',
+    chat_id: null,
+    selected_chat: null,
+    custom_chat: '',
     admin_id: null,
     is_active: true,
   }
@@ -325,15 +405,30 @@ function openCreateModal() {
 
 function openEditModal(item) {
   isEditing.value = true
-  form.value = {
-    slug: item.slug,
-    name: item.name,
-    tier: item.tier,
-    description: item.description,
-    chat_url: item.chat_url,
-    admin_id: item.admin_id || null,
-    is_active: item.is_active,
+  const matchingChat = availableChats.value.find(c => c.chat_id === item.chat_id)
+  if (matchingChat) {
+    isCustomChat.value = false
+    form.value.selected_chat = matchingChat.chat_id
+    form.value.custom_chat = ''
+  } else if (item.chat_id || item.chat_url) {
+    isCustomChat.value = true
+    form.value.selected_chat = '__custom__'
+    form.value.custom_chat = item.chat_url || (item.chat_id ? String(item.chat_id) : '')
+  } else {
+    isCustomChat.value = false
+    form.value.selected_chat = null
+    form.value.custom_chat = ''
   }
+
+  form.value.slug = item.slug
+  form.value.name = item.name
+  form.value.tier = item.tier
+  form.value.description = item.description
+  form.value.chat_url = item.chat_url || ''
+  form.value.chat_id = item.chat_id || null
+  form.value.admin_id = item.admin_id || null
+  form.value.is_active = item.is_active
+
   showModal.value = true
 }
 
@@ -344,12 +439,14 @@ function closeModal() {
 async function saveDiscipline() {
   modalSaving.value = true
   try {
+    const chatUrlPayload = form.value.chat_url || (form.value.chat_id ? `https://t.me/c/${String(form.value.chat_id).replace('-100', '')}` : 'https://t.me')
     if (isEditing.value) {
       await disciplineApi.update(form.value.slug, {
         name: form.value.name,
         tier: form.value.tier,
         description: form.value.description,
-        chat_url: form.value.chat_url,
+        chat_url: chatUrlPayload,
+        chat_id: form.value.chat_id,
         admin_id: form.value.admin_id,
         is_active: form.value.is_active,
       })
@@ -360,7 +457,8 @@ async function saveDiscipline() {
         name: form.value.name,
         tier: form.value.tier,
         description: form.value.description,
-        chat_url: form.value.chat_url,
+        chat_url: chatUrlPayload,
+        chat_id: form.value.chat_id,
         admin_id: form.value.admin_id,
       })
       showToast(`Discipline "${form.value.name}" created.`)
@@ -402,6 +500,7 @@ onMounted(() => {
   }
   fetchDisciplines()
   fetchEligibleUsers()
+  fetchAvailableChats()
 })
 </script>
 

@@ -42,3 +42,9 @@ export const disciplineApi = {
 export const userApi = {
   getUsers: (params) => api.get('/admin/users', { params }),
 }
+
+export const chatApi = {
+  getChats: (params) => api.get('/admin/chats', { params }),
+  syncChat: (chatId) => api.post(`/admin/chats/${chatId}/sync`),
+  createInviteLink: (chatId, data) => api.post(`/admin/chats/${chatId}/invite-link`, data),
+}

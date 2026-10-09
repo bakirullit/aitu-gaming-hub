@@ -336,7 +336,7 @@ async def test_disciplines_api_crud_endpoints(in_memory_db):
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            # 1. Create discipline
+            # 1. Create discipline with chat_id
             create_resp = await ac.post(
                 "/api/admin/disciplines",
                 json={
@@ -345,19 +345,21 @@ async def test_disciplines_api_crud_endpoints(in_memory_db):
                     "tier": "major",
                     "description": "Battle royale battles at AITU",
                     "chat_url": "https://t.me/pubg_aitu",
+                    "chat_id": -100987654321,
                 },
             )
             assert create_resp.status_code == 201
             data = create_resp.json()
             assert data["slug"] == "pubg"
             assert data["tier"] == "major"
+            assert data["chat_id"] == -100987654321
             assert data["is_active"] is True
 
             # 2. Get disciplines list
             list_resp = await ac.get("/api/admin/disciplines")
             assert list_resp.status_code == 200
             items = list_resp.json()
-            assert any(d["slug"] == "pubg" for d in items)
+            assert any(d["slug"] == "pubg" and d.get("chat_id") == -100987654321 for d in items)
 
             # 3. Patch discipline
             patch_resp = await ac.patch(
@@ -365,11 +367,13 @@ async def test_disciplines_api_crud_endpoints(in_memory_db):
                 json={
                     "name": "PUBG Mobile Champions",
                     "tier": "medium",
+                    "chat_id": -100112233445,
                 },
             )
             assert patch_resp.status_code == 200
             assert patch_resp.json()["name"] == "PUBG Mobile Champions"
             assert patch_resp.json()["tier"] == "medium"
+            assert patch_resp.json()["chat_id"] == -100112233445
 
             # 4. Delete (deactivate) discipline
             del_resp = await ac.delete("/api/admin/disciplines/pubg")

@@ -27,6 +27,7 @@ from plugins.minecraft.plugin import MinecraftPlugin
 from plugins.helpdesk.plugin import HelpdeskPlugin
 from plugins.tournaments.plugin import TournamentsPlugin
 from plugins.disciplines.plugin import DisciplinesPlugin
+from core.routers.chat_events import chat_events_router
 
 
 logger = logging.getLogger("core.lifespan")
@@ -97,7 +98,8 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     await plugin_manager.setup_all(core)
 
-
+    # Attach Core Chat Events Router (my_chat_member, group migration)
+    dp.include_router(chat_events_router)
 
     # Store in runtime container
     runtime.bot = bot
@@ -107,6 +109,10 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
     runtime.plugin_manager = plugin_manager
 
     # 6. Configure Telegram Ingress (Webhook vs Polling)
+    used_updates = list(dp.resolve_used_update_types())
+    if "my_chat_member" not in used_updates:
+        used_updates.append("my_chat_member")
+
     if settings.is_webhook_enabled:
         webhook_url = f"{settings.WEBHOOK_URL.rstrip('/')}{settings.WEBHOOK_PATH}"
         logger.info(f"Setting Telegram webhook to: {webhook_url}")
@@ -115,13 +121,14 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
                 url=webhook_url,
                 secret_token=settings.WEBHOOK_SECRET,
                 drop_pending_updates=True,
+                allowed_updates=used_updates,
             )
         except Exception as exc:
             logger.error(f"Failed to set webhook on startup: {exc}")
     else:
         logger.info("Webhook URL not configured. Starting Aiogram background polling for local dev...")
         runtime.polling_task = asyncio.create_task(
-            dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+            dp.start_polling(bot, allowed_updates=used_updates)
         )
 
     logger.info("AITU Gaming Hub Core is ready to process traffic.")

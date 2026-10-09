@@ -25,6 +25,7 @@ class Discipline(Base):
     )
     description: Mapped[str] = mapped_column(String(512), nullable=False)
     chat_url: Mapped[str] = mapped_column(String(255), nullable=False)
+    chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
     # Curator assignment
     admin_id: Mapped[int | None] = mapped_column(

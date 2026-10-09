@@ -194,10 +194,11 @@ class DisciplineService:
         name: str,
         tier: DisciplineTier,
         description: str,
-        chat_url: str,
+        chat_url: str | None,
         admin_id: int | None,
         session: AsyncSession,
         redis: Redis | None = None,
+        chat_id: int | None = None,
     ) -> Discipline:
         """Create a new discipline and optionally assign an initial curator."""
         clean_slug = slug.strip().lower()
@@ -205,12 +206,17 @@ class DisciplineService:
         if existing:
             raise ValueError(f"Discipline with slug '{clean_slug}' already exists.")
 
+        effective_chat_url = (chat_url or "").strip()
+        if not effective_chat_url and chat_id is not None:
+            effective_chat_url = f"https://t.me/c/{str(abs(chat_id)).replace('100', '')}"
+
         discipline = Discipline(
             slug=clean_slug,
             name=name.strip(),
             tier=tier,
             description=description.strip(),
-            chat_url=chat_url.strip(),
+            chat_url=effective_chat_url,
+            chat_id=chat_id,
             admin_id=None,
             is_active=True,
         )

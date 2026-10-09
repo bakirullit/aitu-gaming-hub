@@ -60,6 +60,7 @@ class DisciplineResponse(BaseModel):
     tier: str
     description: str
     chat_url: str
+    chat_id: int | None = None
     admin_id: int | None = None
     is_active: bool
     created_at: datetime
@@ -75,7 +76,8 @@ class DisciplineCreateRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=64)
     tier: str = Field(default="medium", description="major or medium")
     description: str = Field(..., min_length=5, max_length=512)
-    chat_url: str = Field(..., min_length=5, max_length=255)
+    chat_url: str | None = Field(None, max_length=255)
+    chat_id: int | None = Field(None, description="Linked TelegramChat ID")
     admin_id: int | None = None
 
 
@@ -83,9 +85,35 @@ class DisciplineUpdateRequest(BaseModel):
     name: str | None = Field(None, min_length=2, max_length=64)
     tier: str | None = None
     description: str | None = Field(None, min_length=5, max_length=512)
-    chat_url: str | None = Field(None, min_length=5, max_length=255)
+    chat_url: str | None = Field(None, max_length=255)
+    chat_id: int | None = Field(None, description="Linked TelegramChat ID")
     admin_id: int | None = None
     is_active: bool | None = None
+
+
+class TelegramChatResponse(BaseModel):
+    chat_id: int
+    title: str
+    username: str | None = None
+    chat_type: str
+    is_active: bool
+    can_invite_users: bool
+    member_count: int | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class InviteLinkRequest(BaseModel):
+    name: str | None = Field(None, max_length=32, description="Optional label for invite link")
+    expire_date: datetime | int | None = Field(None, description="Expiration date or unix timestamp")
+    member_limit: int | None = Field(None, ge=1, le=99999, description="Optional maximum members allowed to join")
+
+
+class InviteLinkResponse(BaseModel):
+    invite_link: str
 
 
 class TournamentPublicResponse(BaseModel):

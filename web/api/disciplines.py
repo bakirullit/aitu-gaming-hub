@@ -62,6 +62,7 @@ async def create_discipline(
             tier=tier_enum,
             description=payload.description,
             chat_url=payload.chat_url,
+            chat_id=payload.chat_id,
             admin_id=payload.admin_id,
             session=session,
             redis=runtime.redis,
@@ -93,6 +94,8 @@ async def update_discipline(
         update_fields["description"] = payload.description
     if payload.chat_url is not None:
         update_fields["chat_url"] = payload.chat_url
+    if payload.chat_id is not None or "chat_id" in payload.model_fields_set:
+        update_fields["chat_id"] = payload.chat_id
     if payload.is_active is not None:
         update_fields["is_active"] = payload.is_active
     if payload.admin_id is not None or "admin_id" in payload.model_fields_set:

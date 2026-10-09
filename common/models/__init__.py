@@ -8,6 +8,7 @@ from common.models.minecraft import (
 from common.models.ticket import HelpdeskTicket
 from common.models.tournament import DisciplineAdmin, TournamentBooking
 from common.models.discipline import Discipline, DisciplineTier
+from common.models.chat import TelegramChat
 
 __all__ = [
     "User",
@@ -20,6 +21,7 @@ __all__ = [
     "TournamentBooking",
     "Discipline",
     "DisciplineTier",
+    "TelegramChat",
 ]
 
 
