@@ -52,7 +52,12 @@ async def request_otp(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    if user.role not in [UserRole.HEAD_ADMIN, UserRole.DISCIPLINE_ADMIN]:
+    is_admin = (
+        user.is_discipline_admin
+        or user.has_role("head_admin", "discipline_admin", "admin", "staff")
+        or str(user.role).lower() in ["head_admin", "discipline_admin", "admin", "staff"]
+    )
+    if not is_admin:
         raise HTTPException(status_code=403, detail="Forbidden: User is not an admin")
 
     # Check cooldown
@@ -118,15 +123,22 @@ async def verify_otp(
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
     
-    if not user or user.role not in [UserRole.HEAD_ADMIN, UserRole.DISCIPLINE_ADMIN]:
+    is_admin = (
+        user.is_discipline_admin
+        or user.has_role("head_admin", "discipline_admin", "admin", "staff")
+        or str(user.role).lower() in ["head_admin", "discipline_admin", "admin", "staff"]
+    )
+    if not user or not is_admin:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     # Generate JWT
     expire = datetime.now(timezone.utc) + timedelta(hours=settings.JWT_EXPIRE_HOURS)
+    role_val = user.role.value if hasattr(user.role, "value") else str(user.role)
     jwt_payload = {
         "sub": str(user.telegram_id),
-        "role": user.role.value,
-        "exp": expire
+        "role": role_val,
+        "roles": user.roles or [],
+        "exp": expire,
     }
     access_token = jwt.encode(jwt_payload, settings.JWT_SECRET, algorithm="HS256")
     

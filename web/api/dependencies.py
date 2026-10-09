@@ -48,7 +48,12 @@ async def get_current_admin(
             detail="User not found",
         )
 
-    if user.role not in [UserRole.HEAD_ADMIN, UserRole.DISCIPLINE_ADMIN]:
+    is_admin = (
+        user.is_discipline_admin
+        or user.has_role("head_admin", "discipline_admin", "admin", "staff")
+        or str(user.role).lower() in ["head_admin", "discipline_admin", "admin", "staff"]
+    )
+    if not is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions",

@@ -48,7 +48,7 @@ class CuratorSummary(BaseModel):
     username: str | None = None
     first_name: str | None = None
     last_name: str | None = None
-    role: UserRole
+    role: str = "guest"
 
     class Config:
         from_attributes = True

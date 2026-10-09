@@ -20,7 +20,8 @@ disciplines_router = APIRouter(prefix="/disciplines", tags=["Disciplines"])
 
 
 def _ensure_head_admin(admin: User) -> None:
-    if admin.role != UserRole.HEAD_ADMIN:
+    is_head = admin.has_role("head_admin") or str(admin.role).lower() == "head_admin"
+    if not is_head:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Head Admins can manage disciplines and curators",
