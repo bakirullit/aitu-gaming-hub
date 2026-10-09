@@ -927,11 +927,12 @@ def test_delete_account_screens_rendering():
     # 2. Confirmation screen displays Steam ID
     confirm_screen = get_delete_account_confirm_screen(steam_id="76561198099887766")
     assert "76561198099887766" in confirm_screen.text
-    assert "🔥 Да, удалить навсегда" in [
+    confirm_btn_texts = [
         btn.text
         for row in confirm_screen.reply_markup.inline_keyboard
         for btn in row
     ]
+    assert any("Да, удалить навсегда" in t for t in confirm_btn_texts)
 
     # 3. Deleted screen
     deleted_screen = get_account_deleted_screen(steam_id="76561198099887766")

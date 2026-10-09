@@ -88,6 +88,7 @@ def get_minecraft_profile_screen(
     username: str | None,
     telegram_id: int,
     has_active_session: bool,
+    can_manage_whitelist: bool = True,
 ) -> Screen:
     """Submodule B: 👤 Профиль игрока screen."""
     if nickname:
@@ -115,20 +116,20 @@ def get_minecraft_profile_screen(
         mod_status=mod_status,
     )
 
-    buttons = [
-        [
+    buttons = []
+    if can_manage_whitelist:
+        buttons.append([
             InlineKeyboardButton(text=get_text("minecraft.profile.buttons.change_nick"), callback_data="mc:change_nick"),
-        ],
-        [
-            InlineKeyboardButton(text=get_text("minecraft.profile.buttons.gen_code"), callback_data="mc:gen_code"),
-        ],
-        [
-            InlineKeyboardButton(text=get_text("minecraft.profile.buttons.unlink"), callback_data="mc:unlink"),
-        ],
-        [
-            InlineKeyboardButton(text=get_text("minecraft.profile.buttons.back"), callback_data="nav:minecraft"),
-        ],
-    ]
+        ])
+    buttons.append([
+        InlineKeyboardButton(text=get_text("minecraft.profile.buttons.gen_code"), callback_data="mc:gen_code"),
+    ])
+    buttons.append([
+        InlineKeyboardButton(text=get_text("minecraft.profile.buttons.unlink"), callback_data="mc:unlink"),
+    ])
+    buttons.append([
+        InlineKeyboardButton(text=get_text("minecraft.profile.buttons.back"), callback_data="nav:minecraft"),
+    ])
 
     return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 

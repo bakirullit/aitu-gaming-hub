@@ -50,11 +50,13 @@ def setup_tournaments_routes(core: CoreContext) -> Router:
             u_res = await session.execute(u_stmt)
             user = u_res.scalar_one_or_none()
 
-            if not disciplines and user and user.role != UserRole.HEAD_ADMIN:
+            is_disc_admin = user and (user.is_discipline_admin or user.has_role("discipline_admin", "head_admin"))
+
+            if not disciplines and not is_disc_admin:
                 return get_access_denied_screen()
 
-            if not disciplines and user and user.role == UserRole.HEAD_ADMIN:
-                disciplines = [d.value for d in DisciplineType]
+            if not disciplines and is_disc_admin:
+                disciplines = [d.value for d in DisciplineType if d != DisciplineType.OTHER]
 
             b_stmt = select(TournamentBooking).where(
                 TournamentBooking.creator_id == user_id,
@@ -83,7 +85,9 @@ def setup_tournaments_routes(core: CoreContext) -> Router:
         u_res = await session.execute(u_stmt)
         user = u_res.scalar_one_or_none()
 
-        if not disciplines and user and user.role != UserRole.HEAD_ADMIN:
+        is_disc_admin = user and (user.is_discipline_admin or user.has_role("discipline_admin", "head_admin"))
+
+        if not disciplines and not is_disc_admin:
             screen = get_access_denied_screen()
             await core.navigator.render(
                 user_id=user_id,
@@ -95,8 +99,8 @@ def setup_tournaments_routes(core: CoreContext) -> Router:
             await callback.answer()
             return
 
-        if not disciplines and user and user.role == UserRole.HEAD_ADMIN:
-            disciplines = [d.value for d in DisciplineType]
+        if not disciplines and is_disc_admin:
+            disciplines = [d.value for d in DisciplineType if d != DisciplineType.OTHER]
 
         b_stmt = select(TournamentBooking).where(
             TournamentBooking.creator_id == user_id,
@@ -132,8 +136,10 @@ def setup_tournaments_routes(core: CoreContext) -> Router:
         admin_roles = da_res.scalars().all()
         disciplines = [str(r.discipline) for r in admin_roles]
 
-        if not disciplines and user and user.role == UserRole.HEAD_ADMIN:
-            disciplines = [d.value for d in DisciplineType]
+        is_disc_admin = user and (user.is_discipline_admin or user.has_role("discipline_admin", "head_admin"))
+
+        if not disciplines and is_disc_admin:
+            disciplines = [d.value for d in DisciplineType if d != DisciplineType.OTHER]
 
         if not disciplines:
             screen = get_access_denied_screen()

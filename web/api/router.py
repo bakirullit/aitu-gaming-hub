@@ -98,6 +98,8 @@ async def update_role(
         raise HTTPException(status_code=404, detail="User not found")
         
     user.role = payload.role
+    if payload.roles is not None:
+        user.roles = payload.roles
     await session.commit()
     await session.refresh(user)
 
@@ -114,7 +116,14 @@ async def update_role(
             try:
                 from plugins.auth.screens import get_welcome_screen
                 full_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or (user.username and f"@{user.username}") or "Студент"
-                welcome_screen = get_welcome_screen(is_verified=user.is_verified, full_name=full_name)
+                welcome_screen = get_welcome_screen(
+                    is_verified=user.is_verified,
+                    full_name=full_name,
+                    role=user.role,
+                    roles=user.roles if hasattr(user, "roles") else [],
+                    is_discipline_admin=user.is_discipline_admin if hasattr(user, "is_discipline_admin") else False,
+                    is_staff=user.is_staff if hasattr(user, "is_staff") else False,
+                )
                 await runtime.core.navigator.render(
                     user_id=telegram_id,
                     chat_id=telegram_id,

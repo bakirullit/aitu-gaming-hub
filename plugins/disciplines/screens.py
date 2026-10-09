@@ -84,6 +84,8 @@ def get_disciplines_catalog_screen(
 def get_discipline_detail_screen(
     discipline: Discipline,
     return_page: int = 1,
+    can_manage_whitelist: bool | None = None,
+    can_book_tournament: bool | None = None,
 ) -> Screen:
     """Details card for a specific discipline with curator and context actions."""
     if discipline.tier == DisciplineTier.MAJOR:
@@ -116,13 +118,20 @@ def get_discipline_detail_screen(
         ])
 
     # 2. Context button: Minecraft whitelist management
-    if discipline.slug.lower() == "minecraft":
+    # Visible when explicitly enabled, or default enabled if curator is assigned
+    show_mc_whitelist = (
+        can_manage_whitelist
+        if can_manage_whitelist is not None
+        else bool(discipline.admin_id)
+    )
+    if discipline.slug.lower() == "minecraft" and show_mc_whitelist:
         keyboard_rows.append([
             InlineKeyboardButton(text=get_text("disciplines.detail.buttons.minecraft"), callback_data="nav:minecraft")
         ])
 
-    # 3. Context button: Tournament slot booking for competitive esports
-    if discipline.slug.lower() in ["cs2", "dota2", "fifa", "valorant", "pubg", "mlbb"]:
+    # 3. Context button: Tournament slot booking (only discipline_admin)
+    show_booking = can_book_tournament if can_book_tournament is not None else True
+    if discipline.slug.lower() in ["cs2", "dota2", "fifa", "valorant", "pubg", "mlbb"] and show_booking:
         keyboard_rows.append([
             InlineKeyboardButton(text=get_text("disciplines.detail.buttons.book_tournament"), callback_data="tb:start")
         ])

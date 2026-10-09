@@ -78,11 +78,25 @@
       "roles": {
         "student": "Студент AITU 🎓",
         "verified_guest": "Verified Guest 🛡️",
-        "guest": "Гость (Guest) 👤"
+        "guest": "Гость (Guest) 👤",
+        "staff": "Staff AITU Gaming 🛡️",
+        "discipline_admin": "Discipline Admin ⚔️",
+        "manager": "Manager 📋",
+        "smm": "SMM 📱",
+        "president": "President 👑",
+        "vice_president": "Vice President 🎖️",
+        "discord_admin": "Discord Admin 💬",
+        "head_admin": "Head Admin 🛡️",
+        "head_smm": "Head SMM 📢",
+        "trade_admin": "Trade Admin 💼",
+        "streamer": "Streamer 🎥",
+        "commentator": "Commentator 🎙️",
+        "commentater": "Commentator 🎙️"
       },
       "buttons": {
         "disciplines": "🎮 Каталог дисциплин",
-        "tournaments": "🏆 Турниры и киберспорт",
+        "tournaments": "🏆 Бронирование турниров",
+        "tournaments_all": "🏆 Турниры и киберспорт",
         "minecraft": "⛏️ Minecraft Сервер",
         "profile": "👤 Мой профиль",
         "helpdesk": "🎫 Служба поддержки"

@@ -1,5 +1,6 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 from common.dtos.screen import Screen
+from common.enums import STAFF_ROLE_TITLES
 from common.models.user import User
 from common.texts import get_text
 
@@ -201,11 +202,40 @@ def get_authorized_menu_screen(
     role: str = "guest",
     is_verified: bool = False,
     has_steam: bool = False,
+    roles: list[str] | None = None,
+    is_discipline_admin: bool = False,
+    is_staff: bool = False,
 ) -> Screen:
-    """Screen: Main Club Menu (Authorized)."""
-    role_norm = role.lower() if role else "guest"
+    """Screen: Main Club Menu (Authorized). Role-based layout."""
+    roles_list = [str(r).lower().replace(" ", "_") for r in (roles or [])]
+    role_norm = str(role).lower().replace(" ", "_") if role else "guest"
+    all_user_roles = set([role_norm] + roles_list)
 
-    if is_verified or role_norm in ["student", "staff", "admin", "discipline_admin", "head_admin"]:
+    # Determine if user is staff or has staff sub-roles
+    has_staff_privilege = (
+        is_staff
+        or "staff" in all_user_roles
+        or any(r in STAFF_ROLE_TITLES for r in all_user_roles)
+    )
+
+    # Determine if user has tournament booking rights:
+    # "типа функция брони турнира только у роли discipline_admin"
+    can_book_tournaments = (
+        is_discipline_admin
+        or "discipline_admin" in all_user_roles
+        or "head_admin" in all_user_roles
+    )
+
+    if has_staff_privilege:
+        staff_titles = []
+        for r in all_user_roles:
+            if r in STAFF_ROLE_TITLES and STAFF_ROLE_TITLES[r] not in staff_titles:
+                staff_titles.append(STAFF_ROLE_TITLES[r])
+        if staff_titles:
+            status_label = f"Staff ({', '.join(staff_titles)}) 🛡️"
+        else:
+            status_label = get_text("auth.menu.roles.staff", default="Staff AITU Gaming 🛡️")
+    elif is_verified or role_norm in ["student", "admin"]:
         status_label = get_text("auth.menu.roles.student", default="Студент AITU 🎓")
     elif role_norm == "verified_guest":
         status_label = get_text("auth.menu.roles.verified_guest", default="Verified Guest 🛡️")
@@ -218,13 +248,16 @@ def get_authorized_menu_screen(
         [
             InlineKeyboardButton(text=get_text("auth.menu.buttons.disciplines"), callback_data="nav:disciplines"),
         ],
-        [
-            InlineKeyboardButton(text=get_text("auth.menu.buttons.tournaments"), callback_data="nav:tournaments"),
-        ],
     ]
 
-    # Minecraft button is available for verified students
-    if is_verified or role_norm in ["student", "staff", "admin", "discipline_admin", "head_admin"]:
+    # Tournament booking button is ONLY shown if user is discipline_admin or head_admin!
+    if can_book_tournaments:
+        buttons.append([
+            InlineKeyboardButton(text=get_text("auth.menu.buttons.tournaments"), callback_data="nav:tournaments"),
+        ])
+
+    # Minecraft button is available for verified students and staff
+    if is_verified or has_staff_privilege or role_norm in ["student", "admin"]:
         buttons.append([
             InlineKeyboardButton(text=get_text("auth.menu.buttons.minecraft"), callback_data="nav:minecraft"),
         ])
@@ -240,9 +273,19 @@ def get_authorized_menu_screen(
 
 
 def get_profile_screen(user_data: dict) -> Screen:
-    """Profile details screen."""
-    role_val = str(user_data.get("role", "guest")).lower()
-    if role_val in ["student", "staff", "admin", "discipline_admin", "head_admin"]:
+    """Profile details screen with all active roles and staff sub-roles."""
+    role_val = str(user_data.get("role", "guest")).lower().replace(" ", "_")
+    user_roles = [str(r).lower().replace(" ", "_") for r in (user_data.get("roles") or [])]
+    all_user_roles = set([role_val] + user_roles)
+
+    staff_titles = []
+    for r in all_user_roles:
+        if r in STAFF_ROLE_TITLES and STAFF_ROLE_TITLES[r] not in staff_titles:
+            staff_titles.append(STAFF_ROLE_TITLES[r])
+
+    if staff_titles:
+        role_title = f"Staff AITU Gaming ({', '.join(staff_titles)}) 🛡️"
+    elif role_val in ["student", "staff", "admin", "discipline_admin", "head_admin"]:
         role_title = get_text("auth.menu.roles.student", default="Студент AITU 🎓")
     elif role_val == "verified_guest":
         role_title = get_text("auth.menu.roles.verified_guest", default="Verified Guest 🛡️")

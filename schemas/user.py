@@ -11,6 +11,19 @@ class UserRole(str, Enum):
     student = "student"
     staff = "staff"
     admin = "admin"
+    # Staff sub-roles
+    discipline_admin = "discipline_admin"
+    manager = "manager"
+    smm = "smm"
+    president = "president"
+    vice_president = "vice_president"
+    discord_admin = "discord_admin"
+    head_admin = "head_admin"
+    head_smm = "head_smm"
+    trade_admin = "trade_admin"
+    streamer = "streamer"
+    commentator = "commentator"
+    commentater = "commentator"
 
 
 class UserBase(BaseModel):

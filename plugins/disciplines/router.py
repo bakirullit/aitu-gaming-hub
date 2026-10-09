@@ -1,8 +1,10 @@
 import logging
 from aiogram import Router, F
 from aiogram.types import CallbackQuery
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from common.models.user import User
 from core.context import CoreContext
 from services.discipline_service import DisciplineService
 from plugins.disciplines.screens import (
@@ -92,7 +94,29 @@ def setup_disciplines_routes(core: CoreContext) -> Router:
 
         user_id = callback.from_user.id
         chat_id = callback.message.chat.id
-        screen = get_discipline_detail_screen(discipline=discipline, return_page=return_page)
+
+        user_stmt = select(User).where(User.telegram_id == user_id)
+        user = (await session.execute(user_stmt)).scalar_one_or_none()
+
+        is_staff = user.is_staff if user else False
+        is_disc_admin = user.is_discipline_admin if user else False
+        is_curator_of_this = (discipline.admin_id == user_id) if user else False
+        is_head_admin = user.has_role("head_admin") if user else False
+
+        # Whitelist is available ONLY for staff minecraft discipline admin (or head_admin):
+        can_manage_whitelist = is_staff and (
+            is_head_admin or is_curator_of_this or (is_disc_admin and discipline.slug.lower() == "minecraft")
+        )
+
+        # Tournament booking is available ONLY for discipline admin (or head_admin):
+        can_book_tournament = is_head_admin or is_curator_of_this or is_disc_admin
+
+        screen = get_discipline_detail_screen(
+            discipline=discipline,
+            return_page=return_page,
+            can_manage_whitelist=can_manage_whitelist,
+            can_book_tournament=can_book_tournament,
+        )
 
         await core.navigator.render(
             user_id=user_id,

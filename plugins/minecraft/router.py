@@ -217,11 +217,23 @@ def setup_minecraft_routes(core: CoreContext) -> Router:
 
         has_active_session = bool(active_session_row or redis_session)
 
+        is_staff = user.is_staff if user else False
+        is_disc_admin = user.is_discipline_admin if user else False
+        is_head_admin = user.has_role("head_admin") if user else False
+
+        from common.models.discipline import Discipline
+        disc_stmt = select(Discipline).where(Discipline.slug == "minecraft")
+        mc_disc = (await session.execute(disc_stmt)).scalar_one_or_none()
+        is_mc_curator = bool(mc_disc and mc_disc.admin_id == user_id)
+
+        can_manage_whitelist = is_staff and (is_head_admin or is_mc_curator or is_disc_admin)
+
         screen = get_minecraft_profile_screen(
             nickname=linked_nick,
             username=user.username if user else callback.from_user.username,
             telegram_id=user_id,
             has_active_session=has_active_session,
+            can_manage_whitelist=can_manage_whitelist,
         )
         await core.navigator.render(
             user_id=user_id,
@@ -232,12 +244,32 @@ def setup_minecraft_routes(core: CoreContext) -> Router:
         )
         await callback.answer()
 
-    @router.callback_query(F.data.in_(["mc:change_nick", "mc:whitelist"]))
-    async def cb_mc_change_nick_prompt(callback: CallbackQuery, state: FSMContext) -> None:
-        await state.set_state(MinecraftProfileSG.waiting_for_nickname)
+    @router.callback_query(F.data.in_(["mc:change_nick", "mc:whitelist", "mc:whitelist_admin"]))
+    async def cb_mc_change_nick_prompt(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
         user_id = callback.from_user.id
         chat_id = callback.message.chat.id
 
+        user_stmt = select(User).where(User.telegram_id == user_id)
+        user = (await session.execute(user_stmt)).scalar_one_or_none()
+
+        is_staff = user.is_staff if user else False
+        is_disc_admin = user.is_discipline_admin if user else False
+        is_head_admin = user.has_role("head_admin") if user else False
+
+        from common.models.discipline import Discipline
+        disc_stmt = select(Discipline).where(Discipline.slug == "minecraft")
+        mc_disc = (await session.execute(disc_stmt)).scalar_one_or_none()
+        is_mc_curator = bool(mc_disc and mc_disc.admin_id == user_id)
+
+        can_manage_whitelist = is_staff and (is_head_admin or is_mc_curator or is_disc_admin)
+        if not can_manage_whitelist:
+            await callback.answer(
+                "⚠️ Управление вайтлистом доступно только администратору дисциплины Minecraft со статусом Staff.",
+                show_alert=True,
+            )
+            return
+
+        await state.set_state(MinecraftProfileSG.waiting_for_nickname)
         screen = get_nickname_prompt_screen()
         await core.navigator.render(
             user_id=user_id,

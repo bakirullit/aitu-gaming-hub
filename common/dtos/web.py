@@ -18,7 +18,8 @@ class UserResponse(BaseModel):
     phone_number: str | None
     email: str | None
     academic_group: str | None
-    role: UserRole
+    role: str
+    roles: list[str] | None = None
     is_verified: bool
     created_at: datetime
     updated_at: datetime
@@ -32,7 +33,8 @@ class TokenResponse(BaseModel):
     user: UserResponse
 
 class RoleUpdateRequest(BaseModel):
-    role: UserRole
+    role: str
+    roles: list[str] | None = None
 
 class PaginatedUsersResponse(BaseModel):
     items: list[UserResponse]
