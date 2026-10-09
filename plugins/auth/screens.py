@@ -1,31 +1,22 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
 from common.dtos.screen import Screen
 from common.models.user import User
+from common.texts import get_text
 
 
 def get_club_info_screen() -> Screen:
     """Screen: About AITU Gaming club for new users with 'Пройти регистрацию' button."""
-    text = (
-        "🎮 <b>Добро пожаловать в AITU Gaming Hub!</b>\n\n"
-        "<b>AITU Gaming</b> — официальное киберспортивное сообщество Astana IT University. "
-        "Мы объединяем студентов, проводим турниры по CS2, Dota 2, Valorant, PUBG, FIFA, "
-        "а также развиваем собственный сервер Minecraft!\n\n"
-        "✨ <b>Что дает регистрация:</b>\n"
-        "• Участие в студенческих и открытых турнирах с призовыми фондами\n"
-        "• Доступ к серверам и академическому комьюнити\n"
-        "• Личный игровой профиль и рейтинг дисциплин\n\n"
-        "Чтобы начать пользоваться платформой, пройдите быструю регистрацию 👇"
-    )
+    text = get_text("auth.club_info.text")
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="📝 Пройти регистрацию", callback_data="auth:start_reg"),
+                InlineKeyboardButton(text=get_text("auth.club_info.buttons.start_reg"), callback_data="auth:start_reg"),
             ],
             [
-                InlineKeyboardButton(text="🎮 Каталог дисциплин", callback_data="nav:disciplines"),
+                InlineKeyboardButton(text=get_text("auth.club_info.buttons.disciplines"), callback_data="nav:disciplines"),
             ],
             [
-                InlineKeyboardButton(text="🎫 Служба поддержки", callback_data="nav:helpdesk"),
+                InlineKeyboardButton(text=get_text("auth.club_info.buttons.helpdesk"), callback_data="nav:helpdesk"),
             ],
         ]
     )
@@ -34,32 +25,20 @@ def get_club_info_screen() -> Screen:
 
 def get_choose_role_screen() -> Screen:
     """State: CHOOSE_ROLE - Select status: Guest, Student, Staff."""
-    text = (
-        "👤 <b>Выберите ваш статус:</b>\n\n"
-        "Пожалуйста, укажите ваш статус для настройки профиля:\n\n"
-        "🎓 <b>Студент AITU</b>\n"
-        "— Для действующих студентов университета\n"
-        "— Доступ ко всем закрытым турнирам и кампусному серверу Minecraft\n"
-        "— Требуется баркод студенческого билета\n\n"
-        "🎮 <b>Гость</b>\n"
-        "— Для гостей, выпускников и участников открытых соревнований\n"
-        "— Быстрая регистрация (привязка Steam повышает до <i>Verified Guest</i>)\n\n"
-        "🛡️ <b>Staff AITU Gaming</b>\n"
-        "— Для организаторов и руководства клуба"
-    )
+    text = get_text("auth.choose_role.text")
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🎓 Студент AITU", callback_data="auth:role:student"),
+                InlineKeyboardButton(text=get_text("auth.choose_role.buttons.student"), callback_data="auth:role:student"),
             ],
             [
-                InlineKeyboardButton(text="🎮 Гость", callback_data="auth:role:guest"),
+                InlineKeyboardButton(text=get_text("auth.choose_role.buttons.guest"), callback_data="auth:role:guest"),
             ],
             [
-                InlineKeyboardButton(text="🛡️ Staff AITU Gaming", callback_data="auth:role:staff"),
+                InlineKeyboardButton(text=get_text("auth.choose_role.buttons.staff"), callback_data="auth:role:staff"),
             ],
             [
-                InlineKeyboardButton(text="◀️ Назад", callback_data="nav:home"),
+                InlineKeyboardButton(text=get_text("auth.choose_role.buttons.back"), callback_data="nav:home"),
             ],
         ]
     )
@@ -68,19 +47,14 @@ def get_choose_role_screen() -> Screen:
 
 def get_staff_closed_screen() -> Screen:
     """Screen shown when Staff registration is selected."""
-    text = (
-        "⛔ <b>Регистрация Staff закрыта</b>\n\n"
-        "Регистрация в роли организатора или судьи AITU Gaming производится "
-        "исключительно через главного администратора клуба.\n\n"
-        "Пожалуйста, обратитесь в службу поддержки или выберите другой статус."
-    )
+    text = get_text("auth.staff_closed.text")
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="◀️ Назад", callback_data="auth:start_reg"),
+                InlineKeyboardButton(text=get_text("auth.staff_closed.buttons.back"), callback_data="auth:start_reg"),
             ],
             [
-                InlineKeyboardButton(text="🎫 Написать в саппорт", callback_data="nav:helpdesk"),
+                InlineKeyboardButton(text=get_text("auth.staff_closed.buttons.helpdesk"), callback_data="nav:helpdesk"),
             ],
         ]
     )
@@ -89,16 +63,11 @@ def get_staff_closed_screen() -> Screen:
 
 def get_full_name_screen() -> Screen:
     """State: INPUT_FULL_NAME - Prompt for full name."""
-    text = (
-        "📝 <b>Введите ФИО</b>\n\n"
-        "Отправьте ваше <b>Имя и Фамилию</b> ответным сообщением в чат.\n\n"
-        "⚠️ <i>Требования: минимум 2 слова, только буквы.</i>\n"
-        "<i>Пример: Алихан Болатов</i>"
-    )
+    text = get_text("auth.full_name.text")
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🚫 Отмена", callback_data="auth:cancel"),
+                InlineKeyboardButton(text=get_text("auth.full_name.buttons.cancel"), callback_data="auth:cancel"),
             ],
         ]
     )
@@ -107,16 +76,11 @@ def get_full_name_screen() -> Screen:
 
 def get_phone_screen(full_name: str) -> Screen:
     """State: INPUT_PHONE - Prompt for phone number with contact button info."""
-    text = (
-        "📱 <b>Отправьте номер телефона</b>\n\n"
-        f"ФИО: <b>{full_name}</b> ✅\n\n"
-        "Нажмите кнопку <b>«Поделиться контактом»</b> внизу экрана или "
-        "напишите номер вручную в международном формате E.164 (например, <code>+77011234567</code>):"
-    )
+    text = get_text("auth.phone.text", full_name=full_name)
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🚫 Отмена", callback_data="auth:cancel"),
+                InlineKeyboardButton(text=get_text("auth.phone.buttons.cancel"), callback_data="auth:cancel"),
             ],
         ]
     )
@@ -128,7 +92,7 @@ def get_phone_reply_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [
-                KeyboardButton(text="📱 Поделиться контактом", request_contact=True),
+                KeyboardButton(text=get_text("auth.phone.buttons.share_contact"), request_contact=True),
             ],
         ],
         resize_keyboard=True,
@@ -138,18 +102,11 @@ def get_phone_reply_keyboard() -> ReplyKeyboardMarkup:
 
 def get_gmail_screen(full_name: str, phone: str) -> Screen:
     """State: INPUT_GMAIL - Prompt for Google email strictly @gmail.com."""
-    text = (
-        "📧 <b>Введите личную почту Google (@gmail.com)</b>\n\n"
-        f"ФИО: <b>{full_name}</b> ✅\n"
-        f"Телефон: <code>{phone}</code> ✅\n\n"
-        "Введите адрес электронной почты Google.\n"
-        "⚠️ <i>Домен строго: <code>@gmail.com</code></i>\n\n"
-        "<i>Пример: student.aitu@gmail.com</i>"
-    )
+    text = get_text("auth.gmail.text", full_name=full_name, phone=phone)
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🚫 Отмена", callback_data="auth:cancel"),
+                InlineKeyboardButton(text=get_text("auth.gmail.buttons.cancel"), callback_data="auth:cancel"),
             ],
         ]
     )
@@ -158,16 +115,11 @@ def get_gmail_screen(full_name: str, phone: str) -> Screen:
 
 def get_barcode_screen(full_name: str) -> Screen:
     """State: INPUT_BARCODE - Prompt for 6-digit student barcode."""
-    text = (
-        "💳 <b>Введите ваш баркод (ID студента)</b>\n\n"
-        f"Студент: <b>{full_name}</b> ✅\n\n"
-        "Введите 6 цифр штрих-кода с вашей студенческой ID-карты Astana IT University.\n"
-        "<i>Пример: 230101</i>"
-    )
+    text = get_text("auth.barcode.text", full_name=full_name)
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🚫 Отмена", callback_data="auth:cancel"),
+                InlineKeyboardButton(text=get_text("auth.barcode.buttons.cancel"), callback_data="auth:cancel"),
             ],
         ]
     )
@@ -177,20 +129,14 @@ def get_barcode_screen(full_name: str) -> Screen:
 def get_otp_screen(barcode: str, target_email: str | None = None) -> Screen:
     """State: INPUT_OTP - Prompt for 6-digit confirmation code."""
     email_destination = target_email or f"{barcode}@astanait.edu.kz"
-    text = (
-        "🔐 <b>Введите код подтверждения из письма</b>\n\n"
-        f"Письмо с 6-значным кодом отправлено на адрес:\n"
-        f"<code>{email_destination}</code>\n\n"
-        "⏱ Код действителен в течение <b>5 минут</b> (до 3 попыток ввода).\n"
-        "Отправьте полученный код в чат:"
-    )
+    text = get_text("auth.otp.text", email_destination=email_destination)
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🔄 Отправить код повторно", callback_data=f"auth:otp:resend:{barcode}"),
+                InlineKeyboardButton(text=get_text("auth.otp.buttons.resend"), callback_data=f"auth:otp:resend:{barcode}"),
             ],
             [
-                InlineKeyboardButton(text="🚫 Отмена", callback_data="auth:cancel"),
+                InlineKeyboardButton(text=get_text("auth.otp.buttons.cancel"), callback_data="auth:cancel"),
             ],
         ]
     )
@@ -203,38 +149,30 @@ def get_steam_screen(
     use_web_app: bool = True,
 ) -> Screen:
     """State: INPUT_STEAM - Official Steam OpenID 2.0 authorization screen via Telegram Mini App."""
-    text = (
-        "🎮 <b>Привязка Steam через официальный шлюз Valve</b>\n\n"
-        "Привязка Steam профиля позволяет получить статус <b>Verified Guest</b> "
-        "и открывает доступ к участию в турнирах клуба!\n\n"
-        "🔒 <b>Защита и безопасность:</b>\n"
-        "Авторизация происходит через официальный защищенный шлюз <b>Steam OpenID 2.0</b> прямо в интерфейсе Telegram. "
-        "Вам не нужно вводить логин или пароль в боте — подтверждение выполняется в защищенном шлюзе Valve.\n\n"
-        "<i>Нажмите кнопку ниже для безопасной привязки аккаунта:</i>"
-    )
+    text = get_text("auth.steam.text")
     buttons = []
     if steam_auth_url:
         if use_web_app:
             buttons.append([
                 InlineKeyboardButton(
-                    text="🎮 Привязать Steam",
+                    text=get_text("auth.steam.buttons.link_steam"),
                     web_app=WebAppInfo(url=steam_auth_url),
                 ),
             ])
         else:
             buttons.append([
                 InlineKeyboardButton(
-                    text="🎮 Войти через Steam",
+                    text=get_text("auth.steam.buttons.login_steam"),
                     url=steam_auth_url,
                 ),
             ])
 
     bottom_row = []
     if is_registration:
-        bottom_row.append(InlineKeyboardButton(text="⏭️ Пропустить", callback_data="auth:steam:skip"))
-        bottom_row.append(InlineKeyboardButton(text="🚫 Отмена", callback_data="auth:cancel"))
+        bottom_row.append(InlineKeyboardButton(text=get_text("auth.steam.buttons.skip"), callback_data="auth:steam:skip"))
+        bottom_row.append(InlineKeyboardButton(text=get_text("auth.steam.buttons.cancel"), callback_data="auth:cancel"))
     else:
-        bottom_row.append(InlineKeyboardButton(text="◀️ В профиль", callback_data="auth:profile"))
+        bottom_row.append(InlineKeyboardButton(text=get_text("auth.steam.buttons.to_profile"), callback_data="auth:profile"))
 
     if bottom_row:
         buttons.append(bottom_row)
@@ -244,17 +182,14 @@ def get_steam_screen(
 
 def get_registration_cancelled_screen() -> Screen:
     """Screen: Registration Cancelled."""
-    text = (
-        "❌ <b>Регистрация отменена</b>\n\n"
-        "Все введенные данные были сброшены. Вы можете начать процесс заново в любое удобное время."
-    )
+    text = get_text("auth.registration_cancelled.text")
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="📝 Пройти регистрацию", callback_data="auth:start_reg"),
+                InlineKeyboardButton(text=get_text("auth.registration_cancelled.buttons.start_reg"), callback_data="auth:start_reg"),
             ],
             [
-                InlineKeyboardButton(text="🏠 Главное меню", callback_data="nav:home"),
+                InlineKeyboardButton(text=get_text("auth.registration_cancelled.buttons.main_menu"), callback_data="nav:home"),
             ],
         ]
     )
@@ -271,39 +206,34 @@ def get_authorized_menu_screen(
     role_norm = role.lower() if role else "guest"
 
     if is_verified or role_norm in ["student", "staff", "admin", "discipline_admin", "head_admin"]:
-        status_label = "Студент AITU 🎓"
+        status_label = get_text("auth.menu.roles.student", default="Студент AITU 🎓")
     elif role_norm == "verified_guest":
-        status_label = "Verified Guest 🛡️"
+        status_label = get_text("auth.menu.roles.verified_guest", default="Verified Guest 🛡️")
     else:
-        status_label = "Гость (Guest) 👤"
+        status_label = get_text("auth.menu.roles.guest", default="Гость (Guest) 👤")
 
-    text = (
-        f"🎮 <b>AITU Gaming Hub — Главное меню</b>\n\n"
-        f"Добро пожаловать, <b>{full_name or 'Игрок'}</b>!\n"
-        f"Статус аккаунта: <b>{status_label}</b>\n\n"
-        f"Выберите раздел:"
-    )
+    text = get_text("auth.menu.text", full_name=full_name or "Игрок", status_label=status_label)
 
     buttons = [
         [
-            InlineKeyboardButton(text="🎮 Каталог дисциплин", callback_data="nav:disciplines"),
+            InlineKeyboardButton(text=get_text("auth.menu.buttons.disciplines"), callback_data="nav:disciplines"),
         ],
         [
-            InlineKeyboardButton(text="🏆 Турниры и киберспорт", callback_data="nav:tournaments"),
+            InlineKeyboardButton(text=get_text("auth.menu.buttons.tournaments"), callback_data="nav:tournaments"),
         ],
     ]
 
     # Minecraft button is available for verified students
     if is_verified or role_norm in ["student", "staff", "admin", "discipline_admin", "head_admin"]:
         buttons.append([
-            InlineKeyboardButton(text="⛏️ Minecraft Сервер", callback_data="nav:minecraft"),
+            InlineKeyboardButton(text=get_text("auth.menu.buttons.minecraft"), callback_data="nav:minecraft"),
         ])
 
     buttons.append([
-        InlineKeyboardButton(text="👤 Мой профиль", callback_data="auth:profile"),
+        InlineKeyboardButton(text=get_text("auth.menu.buttons.profile"), callback_data="auth:profile"),
     ])
     buttons.append([
-        InlineKeyboardButton(text="🎫 Служба поддержки", callback_data="nav:helpdesk"),
+        InlineKeyboardButton(text=get_text("auth.menu.buttons.helpdesk"), callback_data="nav:helpdesk"),
     ])
 
     return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
@@ -313,63 +243,57 @@ def get_profile_screen(user_data: dict) -> Screen:
     """Profile details screen."""
     role_val = str(user_data.get("role", "guest")).lower()
     if role_val in ["student", "staff", "admin", "discipline_admin", "head_admin"]:
-        role_title = "Студент AITU 🎓"
+        role_title = get_text("auth.menu.roles.student", default="Студент AITU 🎓")
     elif role_val == "verified_guest":
-        role_title = "Verified Guest 🛡️"
+        role_title = get_text("auth.menu.roles.verified_guest", default="Verified Guest 🛡️")
     else:
-        role_title = "Гость (Guest) 👤"
+        role_title = get_text("auth.menu.roles.guest", default="Гость (Guest) 👤")
 
     fname = user_data.get("full_name") or f"{user_data.get('first_name', '')} {user_data.get('last_name', '')}".strip() or "—"
     steam_val = user_data.get("steam_id") or "Не привязан"
     barcode_val = user_data.get("barcode") or "—"
+    username_val = user_data.get("username") or "не указан"
 
-    text = (
-        f"👤 <b>Профиль игрока</b>\n\n"
-        f"• ФИО: <b>{fname}</b>\n"
-        f"• Username: @{user_data.get('username') or 'не указан'}\n"
-        f"• Телефон: <code>{user_data.get('phone_number', '—')}</code>\n"
-        f"• Gmail: <code>{user_data.get('email', '—')}</code>\n"
-        f"• Bar-Code: <code>{barcode_val}</code>\n"
-        f"• Steam ID: <code>{steam_val}</code>\n"
-        f"• Роль: <b>{role_title}</b>\n"
+    text = get_text(
+        "auth.profile.text",
+        full_name=fname,
+        username=username_val,
+        phone=user_data.get("phone_number", "—"),
+        email=user_data.get("email", "—"),
+        barcode=barcode_val,
+        steam_id=steam_val,
+        role_title=role_title,
     )
 
     buttons = []
     if not user_data.get("steam_id"):
-        buttons.append([InlineKeyboardButton(text="🎮 Привязать Steam", callback_data="auth:profile:link_steam")])
+        buttons.append([InlineKeyboardButton(text=get_text("auth.profile.buttons.link_steam"), callback_data="auth:profile:link_steam")])
     if role_val in ["guest", "verified_guest"]:
-        buttons.append([InlineKeyboardButton(text="🎓 Верифицировать студента AITU", callback_data="auth:profile:upgrade_student")])
-    buttons.append([InlineKeyboardButton(text="🗑️ Удалить аккаунт", callback_data="auth:profile:delete_account")])
-    buttons.append([InlineKeyboardButton(text="◀️ В главное меню", callback_data="nav:home")])
+        buttons.append([InlineKeyboardButton(text=get_text("auth.profile.buttons.verify_student"), callback_data="auth:profile:upgrade_student")])
+    buttons.append([InlineKeyboardButton(text=get_text("auth.profile.buttons.delete_account"), callback_data="auth:profile:delete_account")])
+    buttons.append([InlineKeyboardButton(text=get_text("auth.profile.buttons.main_menu"), callback_data="nav:home")])
 
     return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
 def get_delete_account_confirm_screen(steam_id: str | None = None) -> Screen:
     """Confirmation screen before permanent account deletion."""
-    steam_info = (
-        f"• <b>Записи и история турниров останутся сохранены за вашим Steam ID:</b> <code>{steam_id}</code>\n"
-        if steam_id
-        else "• <i>Steam ID не был привязан (турнирные записи останутся анонимными).</i>\n"
-    )
-    text = (
-        "⚠️ <b>Подтверждение удаления аккаунта</b>\n\n"
-        "Вы действительно хотите удалить свой профиль в <b>AITU Gaming Hub</b>?\n\n"
-        "• Все личные данные (ФИО, телефон, почта, баркод) будут безвозвратно стерты.\n"
-        f"{steam_info}"
-        "• Привязка к Telegram удалится — вы сможете зарегистрироваться заново в любое время.\n\n"
-        "<b>Внимание:</b> Это действие необратимо!"
-    )
+    if steam_id:
+        steam_info = get_text("auth.delete_confirm.steam_info_saved", steam_id=steam_id)
+    else:
+        steam_info = get_text("auth.delete_confirm.steam_info_none")
+
+    text = get_text("auth.delete_confirm.text", steam_info=steam_info)
     buttons = [
         [
             InlineKeyboardButton(
-                text="🔥 Да, удалить навсегда",
+                text=get_text("auth.delete_confirm.buttons.confirm"),
                 callback_data="auth:profile:delete_account:confirm",
             ),
         ],
         [
             InlineKeyboardButton(
-                text="◀️ Отмена",
+                text=get_text("auth.delete_confirm.buttons.cancel"),
                 callback_data="auth:profile",
             ),
         ],
@@ -379,23 +303,18 @@ def get_delete_account_confirm_screen(steam_id: str | None = None) -> Screen:
 
 def get_account_deleted_screen(steam_id: str | None = None) -> Screen:
     """Screen displayed after account has been deleted."""
-    steam_info = (
-        f"Все записи ваших турниров сохранены за Steam ID: <code>{steam_id}</code>.\n\n"
-        if steam_id
-        else ""
-    )
-    text = (
-        "🗑️ <b>Ваш аккаунт успешно удален</b>\n\n"
-        "Все персональные данные были удалены из системы.\n"
-        f"{steam_info}"
-        "Если вы захотите вернуться, нажмите кнопку регистрации ниже 👇"
-    )
+    if steam_id:
+        steam_info = get_text("auth.deleted.steam_info_saved", steam_id=steam_id)
+    else:
+        steam_info = ""
+
+    text = get_text("auth.deleted.text", steam_info=steam_info)
     buttons = [
         [
-            InlineKeyboardButton(text="📝 Зарегистрироваться", callback_data="auth:start_reg"),
+            InlineKeyboardButton(text=get_text("auth.deleted.buttons.register"), callback_data="auth:start_reg"),
         ],
         [
-            InlineKeyboardButton(text="ℹ️ О клубе", callback_data="auth:club_info"),
+            InlineKeyboardButton(text=get_text("auth.deleted.buttons.club_info"), callback_data="auth:club_info"),
         ],
     ]
     return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
@@ -432,12 +351,10 @@ def get_group_prompt_screen(email: str = "") -> Screen:
 
 
 def get_verification_success_screen(full_name: str = "", barcode: str = "", group: str = "") -> Screen:
-    text = (
-        f"🎉 <b>Студенческая верификация успешно пройдена!</b>\n\n"
-        f"👤 Студент: <b>{full_name}</b>\n"
-        f"💳 Bar-Code: <code>{barcode}</code>\n"
-        f"🔰 Роль: <b>Студент AITU</b> ✅"
+    text = get_text(
+        "auth.verification_success.text",
+        full_name=full_name,
+        barcode=barcode,
+        group=group,
     )
     return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=[]))
-
-

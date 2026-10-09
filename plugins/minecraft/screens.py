@@ -2,6 +2,7 @@ import math
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from common.config import settings
 from common.dtos.screen import Screen
+from common.texts import get_text
 
 
 def get_minecraft_home_screen(
@@ -12,38 +13,32 @@ def get_minecraft_home_screen(
 ) -> Screen:
     """
     Minecraft Discipline Hub Dashboard screen.
-    Menu:
-    [ 🌐 Сервера ]        [ 👤 Профиль ]
-    [ 👥 Друзья ]         [ 📢 Канал дисциплины ]
-    [ ⬅ Назад в дисциплины ]
     """
     addr = server_ip or settings.MINECRAFT_SERVER_IP
     if linked_nick:
-        nick_info = f"<code>{linked_nick}</code> (Вайтлист активен ✅)"
+        nick_info = get_text("minecraft.home.nick_linked", nickname=linked_nick)
     else:
-        nick_info = "<i>Не привязан ⚠️</i>"
+        nick_info = get_text("minecraft.home.nick_unlinked")
 
-    text = (
-        "⛏️ <b>AITU Minecraft Community Server</b>\n\n"
-        "Официальный сервер киберспортивного клуба Astana IT University.\n"
-        "Добро пожаловать в игровое пространство <b>AITU SMP</b>!\n\n"
-        f"• <b>Minecraft Никнейм:</b> {nick_info}\n"
-        f"• <b>Статус сервера:</b> 🟢 Онлайн (<code>{online} / {max_players} игроков</code>)\n"
-        f"• <b>Адрес:</b> <code>{addr}</code>\n\n"
-        "Выберите интересующий раздел:"
+    text = get_text(
+        "minecraft.home.text",
+        nick_info=nick_info,
+        online=online,
+        max_players=max_players,
+        addr=addr,
     )
 
     buttons = [
         [
-            InlineKeyboardButton(text="🌐 Сервера", callback_data="cb_mc_servers"),
-            InlineKeyboardButton(text="👤 Профиль", callback_data="cb_mc_profile"),
+            InlineKeyboardButton(text=get_text("minecraft.home.buttons.servers"), callback_data="cb_mc_servers"),
+            InlineKeyboardButton(text=get_text("minecraft.home.buttons.profile"), callback_data="cb_mc_profile"),
         ],
         [
-            InlineKeyboardButton(text="👥 Друзья", callback_data="cb_mc_friends"),
-            InlineKeyboardButton(text="📢 Канал дисциплины", callback_data="cb_mc_channel"),
+            InlineKeyboardButton(text=get_text("minecraft.home.buttons.friends"), callback_data="cb_mc_friends"),
+            InlineKeyboardButton(text=get_text("minecraft.home.buttons.channel"), callback_data="cb_mc_channel"),
         ],
         [
-            InlineKeyboardButton(text="⬅ Назад в дисциплины", callback_data="nav:disciplines"),
+            InlineKeyboardButton(text=get_text("minecraft.home.buttons.back_disciplines"), callback_data="nav:disciplines"),
         ],
     ]
 
@@ -60,28 +55,28 @@ def get_minecraft_servers_screen(
     modpack_url: str,
 ) -> Screen:
     """Submodule A: 🌐 Сервера screen."""
-    text = (
-        "🌐 <b>Игровые сервера AITU Minecraft</b>\n\n"
-        f"• <b>Название:</b> <b>{server_name}</b>\n"
-        f"• <b>Версия:</b> <code>{version}</code> (Java Edition)\n"
-        f"• <b>Статус:</b> 🟢 Online (<code>{online} / {max_players} игроков</code>)\n"
-        f"• <b>Адрес для входа:</b> <code>{address}</code>\n"
-        f"• <b>Описание:</b> <i>{motd}</i>\n\n"
-        "<i>Для подключения к серверу необходим официальный модпак клуба.</i>"
+    text = get_text(
+        "minecraft.servers.text",
+        server_name=server_name,
+        version=version,
+        online=online,
+        max_players=max_players,
+        address=address,
+        motd=motd,
     )
 
     buttons = [
         [
-            InlineKeyboardButton(text="📋 Скопировать IP", callback_data="mc:copy_ip"),
+            InlineKeyboardButton(text=get_text("minecraft.servers.buttons.copy_ip"), callback_data="mc:copy_ip"),
         ],
         [
-            InlineKeyboardButton(text="📦 Скачать модпак / Клиент", url=modpack_url),
+            InlineKeyboardButton(text=get_text("minecraft.servers.buttons.download_modpack"), url=modpack_url),
         ],
         [
-            InlineKeyboardButton(text="🔄 Обновить статус", callback_data="cb_mc_servers"),
+            InlineKeyboardButton(text=get_text("minecraft.servers.buttons.refresh"), callback_data="cb_mc_servers"),
         ],
         [
-            InlineKeyboardButton(text="⬅ Назад", callback_data="nav:minecraft"),
+            InlineKeyboardButton(text=get_text("minecraft.servers.buttons.back"), callback_data="nav:minecraft"),
         ],
     ]
 
@@ -96,10 +91,10 @@ def get_minecraft_profile_screen(
 ) -> Screen:
     """Submodule B: 👤 Профиль игрока screen."""
     if nickname:
-        acc_status = "✅ Привязан"
+        acc_status = get_text("minecraft.profile.status_linked", default="✅ Привязан")
         nick_display = f"<code>{nickname}</code>"
     else:
-        acc_status = "⚠️ Не привязан"
+        acc_status = get_text("minecraft.profile.status_unlinked", default="⚠️ Не привязан")
         nick_display = "<i>Не установлен</i>"
 
     if username:
@@ -107,29 +102,31 @@ def get_minecraft_profile_screen(
     else:
         tg_display = f"ID: <code>{telegram_id}</code>"
 
-    mod_status = "🟢 Активная сессия" if has_active_session else "⚪ Не активен"
+    if has_active_session:
+        mod_status = get_text("minecraft.profile.mod_active", default="🟢 Активная сессия")
+    else:
+        mod_status = get_text("minecraft.profile.mod_inactive", default="⚪ Не активен")
 
-    text = (
-        "👤 <b>Профиль игрока Minecraft</b>\n\n"
-        f"• <b>Статус аккаунта:</b> {acc_status}\n"
-        f"• <b>Minecraft Никнейм:</b> {nick_display}\n"
-        f"• <b>Telegram:</b> {tg_display}\n"
-        f"• <b>Статус мода:</b> {mod_status}\n\n"
-        "<i>Используйте кнопки ниже для настройки вашего профиля, привязки никнейма и получения кода для входа через клиентский мод:</i>"
+    text = get_text(
+        "minecraft.profile.text",
+        acc_status=acc_status,
+        nick_display=nick_display,
+        tg_display=tg_display,
+        mod_status=mod_status,
     )
 
     buttons = [
         [
-            InlineKeyboardButton(text="✏ Сменить никнейм", callback_data="mc:change_nick"),
+            InlineKeyboardButton(text=get_text("minecraft.profile.buttons.change_nick"), callback_data="mc:change_nick"),
         ],
         [
-            InlineKeyboardButton(text="🔑 Сгенерировать код для входа", callback_data="mc:gen_code"),
+            InlineKeyboardButton(text=get_text("minecraft.profile.buttons.gen_code"), callback_data="mc:gen_code"),
         ],
         [
-            InlineKeyboardButton(text="🔓 Отвязать аккаунт", callback_data="mc:unlink"),
+            InlineKeyboardButton(text=get_text("minecraft.profile.buttons.unlink"), callback_data="mc:unlink"),
         ],
         [
-            InlineKeyboardButton(text="⬅ Назад", callback_data="nav:minecraft"),
+            InlineKeyboardButton(text=get_text("minecraft.profile.buttons.back"), callback_data="nav:minecraft"),
         ],
     ]
 
@@ -138,21 +135,14 @@ def get_minecraft_profile_screen(
 
 def get_minecraft_code_screen(pin: str, nickname: str) -> Screen:
     """Display generated 6-digit PIN code."""
-    text = (
-        "🔑 <b>Код авторизации для Minecraft клиента</b>\n\n"
-        f"Ваш одноразовый PIN-код:\n"
-        f"<code>{pin}</code>\n\n"
-        f"• Никнейм: <code>{nickname}</code>\n"
-        "• Срок действия: <b>3 минуты</b>\n\n"
-        "<i>Откройте Minecraft с установленным модом AITU Auth и введите этот код для входа.</i>"
-    )
+    text = get_text("minecraft.code.text", pin=pin, nickname=nickname)
 
     buttons = [
         [
-            InlineKeyboardButton(text="🔄 Сгенерировать новый код", callback_data="mc:gen_code"),
+            InlineKeyboardButton(text=get_text("minecraft.code.buttons.new_code"), callback_data="mc:gen_code"),
         ],
         [
-            InlineKeyboardButton(text="◀️ Назад в профиль", callback_data="cb_mc_profile"),
+            InlineKeyboardButton(text=get_text("minecraft.code.buttons.back_profile"), callback_data="cb_mc_profile"),
         ],
     ]
 
@@ -161,15 +151,10 @@ def get_minecraft_code_screen(pin: str, nickname: str) -> Screen:
 
 def get_nickname_prompt_screen() -> Screen:
     """Prompt asking user to enter their Java Edition nickname."""
-    text = (
-        "✏️ <b>Привязка / смена никнейма Minecraft</b>\n\n"
-        "Отправьте ваш игровой никнейм в Minecraft Java Edition (от 3 до 16 символов, только английские буквы, цифры и _).\n\n"
-        "Пример: <code>Steve_AITU</code>\n\n"
-        "<i>💡 Никнейм будет автоматически добавлен в вайтлист сервера и синхронизирован с клиентом.</i>"
-    )
+    text = get_text("minecraft.nickname_prompt.text")
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Отмена", callback_data="cb_mc_profile")],
+            [InlineKeyboardButton(text=get_text("minecraft.nickname_prompt.buttons.cancel"), callback_data="cb_mc_profile")],
         ]
     )
     return Screen(text=text, reply_markup=keyboard)
@@ -180,17 +165,16 @@ get_minecraft_prompt_nickname_screen = get_nickname_prompt_screen
 
 def get_whitelist_success_screen(nickname: str, rcon_response: str) -> Screen:
     """Screen shown upon successful whitelist addition."""
-    text = (
-        "🎉 <b>Никнейм успешно привязан и добавлен в вайтлист!</b>\n\n"
-        f"• Никнейм: <code>{nickname}</code>\n"
-        f"• Ответ сервера: <i>{rcon_response}</i>\n"
-        f"• IP для подключения: <code>{settings.MINECRAFT_SERVER_IP}</code>\n\n"
-        "Приятной игры на сервере AITU!"
+    text = get_text(
+        "minecraft.whitelist_success.text",
+        nickname=nickname,
+        rcon_response=rcon_response,
+        server_ip=settings.MINECRAFT_SERVER_IP,
     )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="👤 В профиль", callback_data="cb_mc_profile")],
-            [InlineKeyboardButton(text="◀️ Меню Minecraft", callback_data="nav:minecraft")],
+            [InlineKeyboardButton(text=get_text("minecraft.whitelist_success.buttons.to_profile"), callback_data="cb_mc_profile")],
+            [InlineKeyboardButton(text=get_text("minecraft.whitelist_success.buttons.to_menu"), callback_data="nav:minecraft")],
         ]
     )
     return Screen(text=text, reply_markup=keyboard)
@@ -202,24 +186,26 @@ def get_minecraft_friends_hub_screen(
     pending_requests_count: int,
 ) -> Screen:
     """Submodule C: 👥 Друзья hub screen."""
-    text = (
-        "👥 <b>Друзья Minecraft</b>\n\n"
-        f"• <b>Всего друзей:</b> <code>{total_friends}</code>\n"
-        f"• <b>В сети:</b> 🟢 <code>{online_friends}</code>\n"
-        f"• <b>Входящие заявки:</b> 📬 <code>{pending_requests_count}</code>\n\n"
-        "<i>Играйте вместе на сервере AITU SMP, находите тиммейтов и отслеживайте друзей онлайн прямо из мода или бота!</i>"
+    text = get_text(
+        "minecraft.friends.text",
+        total_friends=total_friends,
+        online_friends=online_friends,
+        pending_requests_count=pending_requests_count,
     )
 
     buttons = [
         [
-            InlineKeyboardButton(text="📜 Список друзей", callback_data="mc:friends_list"),
-            InlineKeyboardButton(text="➕ Добавить друга", callback_data="mc:add_friend"),
+            InlineKeyboardButton(text=get_text("minecraft.friends.buttons.list"), callback_data="mc:friends_list"),
+            InlineKeyboardButton(text=get_text("minecraft.friends.buttons.add"), callback_data="mc:add_friend"),
         ],
         [
-            InlineKeyboardButton(text=f"📥 Заявки ({pending_requests_count})", callback_data="mc:friend_requests"),
+            InlineKeyboardButton(
+                text=get_text("minecraft.friends.buttons.requests", count=pending_requests_count),
+                callback_data="mc:friend_requests",
+            ),
         ],
         [
-            InlineKeyboardButton(text="⬅ Назад", callback_data="nav:minecraft"),
+            InlineKeyboardButton(text=get_text("minecraft.friends.buttons.back"), callback_data="nav:minecraft"),
         ],
     ]
 

@@ -4,6 +4,7 @@ from common.dtos.screen import Screen
 from common.enums import TournamentStatus
 from common.models.tournament import TournamentBooking
 from common.models.user import User
+from common.texts import get_text
 
 FORMAT_LOC_LABELS = {
     "online": "🌐 Онлайн",
@@ -45,16 +46,11 @@ def format_summary_label(event_format: str) -> str:
 
 def get_access_denied_screen() -> Screen:
     """Screen shown when non-admin tries to access tournament booking."""
-    text = (
-        "⛔ <b>Доступ ограничен</b>\n\n"
-        "Бронирование турниров доступно только аккредитованным <b>администраторам дисциплин</b> "
-        "и руководству киберспортивного клуба AITU Gaming Hub.\n\n"
-        "Если вы являетесь организатором, обратитесь в поддержку для выдачи прав."
-    )
+    text = get_text("tournaments.access_denied.text")
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🎫 Обратиться в поддержку", callback_data="nav:helpdesk")],
-            [InlineKeyboardButton(text="◀️ Главное меню", callback_data="nav:home")],
+            [InlineKeyboardButton(text=get_text("tournaments.access_denied.buttons.helpdesk"), callback_data="nav:helpdesk")],
+            [InlineKeyboardButton(text=get_text("tournaments.access_denied.buttons.main_menu"), callback_data="nav:home")],
         ]
     )
     return Screen(text=text, reply_markup=keyboard)
@@ -63,47 +59,40 @@ def get_access_denied_screen() -> Screen:
 def get_tournaments_home_screen(admin_disciplines: list[str], active_bookings_count: int = 0) -> Screen:
     """Tournaments hub home screen for discipline admins."""
     disciplines_str = ", ".join(admin_disciplines) if admin_disciplines else "Не назначено"
-    text = (
-        "🏆 <b>Управление турнирами AITU Gaming Hub</b>\n\n"
-        f"Ваши закрепленные дисциплины: <b>{disciplines_str}</b>\n"
-        f"Активных броней: <b>{active_bookings_count}</b>\n\n"
-        "Anchor Wizard позволяет быстро зарезервировать слот даты, "
-        "настроить формат соревнований и передать регламент руководству."
+    text = get_text(
+        "tournaments.home.text",
+        disciplines=disciplines_str,
+        active_bookings_count=active_bookings_count,
     )
     buttons = [
-        [InlineKeyboardButton(text="📅 Забронировать слот турнира", callback_data="tb:start")],
-        [InlineKeyboardButton(text="📋 Мои заявки на слоты", callback_data="tb:my_bookings")],
-        [InlineKeyboardButton(text="◀️ Главное меню", callback_data="nav:home")],
+        [InlineKeyboardButton(text=get_text("tournaments.home.buttons.start"), callback_data="tb:start")],
+        [InlineKeyboardButton(text=get_text("tournaments.home.buttons.my_bookings"), callback_data="tb:my_bookings")],
+        [InlineKeyboardButton(text=get_text("tournaments.home.buttons.main_menu"), callback_data="nav:home")],
     ]
     return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
 def get_discipline_choice_screen(disciplines: list[str]) -> Screen:
     """Prompt for admin managing multiple disciplines."""
-    text = (
-        "🎮 <b>Выбор дисциплины турнира</b>\n\n"
-        "Вы курируете несколько дисциплин. Выберите дисциплину для проведения турнира:"
-    )
+    text = get_text("tournaments.discipline_choice.text")
     buttons = [
         [InlineKeyboardButton(text=f"🎮 {disc}", callback_data=f"tb:choose_disc:{disc}")]
         for disc in disciplines
     ]
-    buttons.append([InlineKeyboardButton(text="◀️ Отмена", callback_data="nav:tournaments")])
+    buttons.append([InlineKeyboardButton(text=get_text("tournaments.discipline_choice.buttons.cancel"), callback_data="nav:tournaments")])
     return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
 def get_booking_title_prompt_screen(discipline: str, organizer_name: str, organizer_email: str) -> Screen:
     """Step 1: Tournament Title."""
-    text = (
-        f"🏆 <b>Бронь турнира: {discipline} (Шаг 1 из 4)</b>\n\n"
-        f"👤 Организатор: <b>{organizer_name}</b>\n"
-        f"📧 Email: <code>{organizer_email}</code>\n"
-        f"🎮 Дисциплина: <b>{discipline}</b>\n\n"
-        "Отправьте в чат <b>название турнира</b> (например: <code>AITU Spring Cup 2026</code>):\n\n"
-        "<i>💡 Ввод текста будет удален сборщиком мусора, экран обновится на месте.</i>"
+    text = get_text(
+        "tournaments.booking_title_prompt.text",
+        discipline=discipline,
+        organizer_name=organizer_name,
+        organizer_email=organizer_email,
     )
     buttons = [
-        [InlineKeyboardButton(text="◀️ Отмена", callback_data="nav:tournaments")],
+        [InlineKeyboardButton(text=get_text("tournaments.booking_title_prompt.buttons.cancel"), callback_data="nav:tournaments")],
     ]
     return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 

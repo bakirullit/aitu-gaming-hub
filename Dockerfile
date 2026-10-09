@@ -39,6 +39,7 @@ COPY schemas/ ./schemas/
 COPY services/ ./services/
 COPY web/ ./web/
 COPY main.py .
+COPY texts.json .
 
 # Copy prebuilt Vue SPA artifacts from Stage 1 into web/app/dist
 COPY --from=frontend-builder /app/frontend/dist ./web/app/dist

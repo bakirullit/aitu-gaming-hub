@@ -2,6 +2,7 @@ import math
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from common.dtos.screen import Screen
 from common.models.discipline import Discipline, DisciplineTier
+from common.texts import get_text
 
 PAGE_SIZE = 6
 DISCORD_INVITE_URL = "https://discord.gg/astanait"
@@ -21,12 +22,11 @@ def get_disciplines_catalog_screen(
     end_idx = start_idx + page_size
     slice_items = disciplines[start_idx:end_idx]
 
-    text = (
-        "🎮 <b>Каталог дисциплин AITU Gaming Hub</b>\n\n"
-        "Выберите игровое направление, чтобы присоединиться к сообществу, "
-        "узнать регламенты или связаться с куратором дисциплины.\n\n"
-        f"📊 Всего активных направлений: <b>{total_items}</b>\n"
-        f"📄 Страница: <b>{current_page} из {total_pages}</b>"
+    text = get_text(
+        "disciplines.catalog.text",
+        total_items=total_items,
+        current_page=current_page,
+        total_pages=total_pages,
     )
 
     keyboard_rows: list[list[InlineKeyboardButton]] = []
@@ -34,7 +34,7 @@ def get_disciplines_catalog_screen(
     # 1. Pinned top button: Discord community link
     keyboard_rows.append([
         InlineKeyboardButton(
-            text="🌐 Наш Discord-сервер",
+            text=get_text("disciplines.catalog.buttons.discord"),
             url=DISCORD_INVITE_URL,
         )
     ])
@@ -56,19 +56,16 @@ def get_disciplines_catalog_screen(
         keyboard_rows.append(current_row)
 
     # 3. Bottom pagination row (3 buttons with native non-jumping layout)
-    # Previous button
     if current_page > 1:
         prev_btn = InlineKeyboardButton(text="⬅️", callback_data=f"disc:page:{current_page - 1}")
     else:
         prev_btn = InlineKeyboardButton(text="⬅️", callback_data="disc:noop")
 
-    # Center badge: Informational, non-clickable
     badge_btn = InlineKeyboardButton(
         text=f"· {current_page}/{total_pages} ·",
         callback_data="disc:noop",
     )
 
-    # Next button
     if current_page < total_pages:
         next_btn = InlineKeyboardButton(text="➡️", callback_data=f"disc:page:{current_page + 1}")
     else:
@@ -78,7 +75,7 @@ def get_disciplines_catalog_screen(
 
     # 4. Exit button: Return to main menu
     keyboard_rows.append([
-        InlineKeyboardButton(text="« ⬅️ В главное меню", callback_data="nav:home")
+        InlineKeyboardButton(text=get_text("disciplines.catalog.buttons.main_menu"), callback_data="nav:home")
     ])
 
     return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_rows))
@@ -89,7 +86,10 @@ def get_discipline_detail_screen(
     return_page: int = 1,
 ) -> Screen:
     """Details card for a specific discipline with curator and context actions."""
-    tier_label = "🔥 Major (>200 игроков)" if discipline.tier == DisciplineTier.MAJOR else "⚡ Medium (50-200 игроков)"
+    if discipline.tier == DisciplineTier.MAJOR:
+        tier_label = get_text("disciplines.detail.tier_major", default="🔥 Major (>200 игроков)")
+    else:
+        tier_label = get_text("disciplines.detail.tier_medium", default="⚡ Medium (50-200 игроков)")
 
     if discipline.admin:
         if discipline.admin.username:
@@ -97,14 +97,14 @@ def get_discipline_detail_screen(
         else:
             curator_str = f"{discipline.admin.first_name} {discipline.admin.last_name or ''}".strip()
     else:
-        curator_str = "<i>Куратор не назначен</i>"
+        curator_str = get_text("disciplines.detail.no_curator", default="<i>Куратор не назначен</i>")
 
-    text = (
-        f"🎮 <b>{discipline.name}</b>\n\n"
-        f"🏷 <b>Категория:</b> {tier_label}\n"
-        f"👤 <b>Куратор направления:</b> {curator_str}\n\n"
-        f"📝 <b>О дисциплине:</b>\n{discipline.description}\n\n"
-        "Присоединяйтесь к комьюнити дисциплины в Telegram:"
+    text = get_text(
+        "disciplines.detail.text",
+        name=discipline.name,
+        tier_label=tier_label,
+        curator_str=curator_str,
+        description=discipline.description or "",
     )
 
     keyboard_rows: list[list[InlineKeyboardButton]] = []
@@ -112,24 +112,24 @@ def get_discipline_detail_screen(
     # 1. URL button opening community chat directly
     if discipline.chat_url:
         keyboard_rows.append([
-            InlineKeyboardButton(text="💬 Чат дисциплины в Telegram ↗", url=discipline.chat_url)
+            InlineKeyboardButton(text=get_text("disciplines.detail.buttons.chat"), url=discipline.chat_url)
         ])
 
     # 2. Context button: Minecraft whitelist management
     if discipline.slug.lower() == "minecraft":
         keyboard_rows.append([
-            InlineKeyboardButton(text="⛏ Управление вайтлистом", callback_data="nav:minecraft")
+            InlineKeyboardButton(text=get_text("disciplines.detail.buttons.minecraft"), callback_data="nav:minecraft")
         ])
 
     # 3. Context button: Tournament slot booking for competitive esports
     if discipline.slug.lower() in ["cs2", "dota2", "fifa", "valorant", "pubg", "mlbb"]:
         keyboard_rows.append([
-            InlineKeyboardButton(text="🏆 Забронировать турнир", callback_data="tb:start")
+            InlineKeyboardButton(text=get_text("disciplines.detail.buttons.book_tournament"), callback_data="tb:start")
         ])
 
     # 4. Return to exact origin page
     keyboard_rows.append([
-        InlineKeyboardButton(text="◀️ Назад к списку дисциплин", callback_data=f"disc:page:{return_page}")
+        InlineKeyboardButton(text=get_text("disciplines.detail.buttons.back_catalog"), callback_data=f"disc:page:{return_page}")
     ])
 
     return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_rows))
