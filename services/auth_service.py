@@ -142,6 +142,11 @@ class AuthService:
                 logger.info(f"Dispatched student OTP email to {recipient} from {sender}")
             except Exception as exc:
                 logger.error(f"Resend SDK dispatch error to {recipient}: {exc}")
+                # Reset rate limiter and invalid OTP so user is not locked out by cooldown
+                try:
+                    await self.redis.delete(rate_key, otp_key)
+                except Exception:
+                    pass
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
                     detail=f"Failed to send email verification: {str(exc)}",

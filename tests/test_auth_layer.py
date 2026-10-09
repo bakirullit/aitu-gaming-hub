@@ -944,4 +944,50 @@ def test_delete_account_screens_rendering():
     ]
 
 
+def test_docker_compose_dns_configuration():
+    """Validates that docker-compose.yml configures explicit DNS servers to avoid resolution failures."""
+    import ipaddress
+    from pathlib import Path
+    import yaml
+
+    compose_path = Path(__file__).resolve().parent.parent / "docker-compose.yml"
+    assert compose_path.exists(), "docker-compose.yml must exist"
+
+    with open(compose_path, "r", encoding="utf-8") as f:
+        compose_data = yaml.safe_load(f)
+
+    app_service = compose_data.get("services", {}).get("app", {})
+    assert "dns" in app_service, "app service in docker-compose.yml must configure explicit 'dns' servers"
+
+    dns_list = app_service["dns"]
+    assert isinstance(dns_list, list) and len(dns_list) >= 2, "app service must have at least 2 DNS servers configured"
+
+    for dns_ip in dns_list:
+        ipaddress.ip_address(str(dns_ip).strip())
+
+    assert any(ip in ["8.8.8.8", "1.1.1.1"] for ip in dns_list)
+
+
+@pytest.mark.asyncio
+async def test_auth_service_resend_dns_or_network_failure_clears_rate_limit(in_mem_db_session):
+    """
+    Validates that when Resend email dispatch fails (e.g. temporary DNS resolution failure),
+    the service resets the rate limit cooldown and OTP code in Redis so the user is not locked out.
+    """
+    import socket
+    mock_redis = MockRedis()
+    custom_settings = Settings(RESEND_API_KEY="test_key_xyz")
+    auth_service = AuthService(session=in_mem_db_session, redis=mock_redis, settings_obj=custom_settings)
+
+    with patch("resend.Emails.send_async", side_effect=socket.gaierror(-3, "Temporary failure in name resolution")):
+        with pytest.raises(HTTPException) as exc_info:
+            await auth_service.send_student_otp(telegram_id=1005, barcode="230105", target_email="test@gmail.com")
+
+        assert exc_info.value.status_code == 502
+        assert "Failed to send email verification" in exc_info.value.detail
+
+    assert await mock_redis.get("rate:otp:student:1005") is None
+    assert await mock_redis.get("otp:230105") is None
+
+
 
