@@ -9,6 +9,9 @@ class OTPVerify(BaseModel):
     telegram_id: int = Field(..., description="The user's Telegram ID")
     code: str = Field(..., description="6-digit OTP code sent via Telegram")
 
+class TelegramWebAppAuthRequest(BaseModel):
+    init_data: str = Field(..., description="Raw initData string from Telegram.WebApp.initData")
+
 class UserResponse(BaseModel):
     telegram_id: int
     username: str | None
@@ -21,6 +24,7 @@ class UserResponse(BaseModel):
     role: str
     roles: list[str] | None = None
     is_verified: bool
+    is_admin: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -31,6 +35,8 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+    is_admin: bool = False
+
 
 class RoleUpdateRequest(BaseModel):
     role: str

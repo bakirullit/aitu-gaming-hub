@@ -64,6 +64,78 @@
         </div>
       </section>
 
+      <!-- Featured Title Card: Open Sunday Tournament CS2 2v2 -->
+      <section class="cs2-title-card" id="cs2-open-sunday-card">
+        <div class="card-glow-layer"></div>
+        <div class="card-inner">
+          <div class="card-header-line">
+            <div class="game-disc-tag">
+              <GameLogo discipline="CS2" :size="24" />
+              <span class="disc-txt">Counter-Strike 2</span>
+              <span class="wingman-txt">Напарники 2v2</span>
+            </div>
+            <div class="format-pill-tag">
+              <span>Two-Day Hybrid Stage</span>
+            </div>
+          </div>
+
+          <div class="card-main-info">
+            <div class="card-text-block">
+              <h2 class="card-main-title" @click="goToCs2Hub">Open Sunday Tournament CS2 2v2</h2>
+              <p class="card-subtitle">Fastcup (Astana) • AITU Gaming Club</p>
+            </div>
+
+            <!-- Stage Indicator Badges -->
+            <div class="card-stage-badges" id="card-stage-badges">
+              <div class="stage-chip chip-live">
+                <span class="pulse-emerald"></span>
+                <span class="chip-label">Сегодня: Онлайн-квалификация (до топ-8)</span>
+              </div>
+              <div class="stage-chip chip-lan">
+                <span class="lan-icon">🏢</span>
+                <span class="chip-label">Завтра: Оффлайн-финал (Top 8 LAN @ C.1.3.267P)</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-details-grid">
+            <div class="detail-cell">
+              <span class="cell-label">Команды:</span>
+              <span class="cell-val">74 команды (Single Elim)</span>
+            </div>
+            <div class="detail-cell">
+              <span class="cell-label">Day 1 (Суббота / Сегодня):</span>
+              <span class="cell-val">Online Fastcup (раунды 1/64, 1/32, 1/16 BO1)</span>
+            </div>
+            <div class="detail-cell">
+              <span class="cell-label">Day 2 (Воскресенье / Завтра):</span>
+              <span class="cell-val">LAN Top 8 @ C.1.3.267P Esport Club</span>
+            </div>
+          </div>
+
+          <div class="card-actions-row">
+            <router-link to="/tournaments/cs2-2v2" class="btn-card-hub" id="btn-open-cs2-hub">
+              <span>Открыть страницу турнира & сетку Challonge ↗</span>
+            </router-link>
+            <button @click="openModal(openSundayTournament)" class="btn-card-quick" id="btn-quick-view-cs2">
+              <svg viewBox="0 0 20 20" width="15" height="15" fill="currentColor">
+                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
+              </svg>
+              <span>Быстрый просмотр</span>
+            </button>
+            <a 
+              href="https://challonge.com/aitu_gaming" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              class="btn-card-challonge"
+            >
+              <span>Сетка на Challonge ↗</span>
+            </a>
+          </div>
+        </div>
+      </section>
+
       <!-- Filter Controls (Esports Charts Design) -->
       <section class="filter-panel">
         <!-- Top filter row -->
@@ -201,7 +273,12 @@
                   </td>
                   <td class="col-name">
                     <div class="event-title-wrap">
-                      <span class="event-title" @click="openModal(t)">{{ t.title }}</span>
+                      <div class="title-with-badge">
+                        <span class="event-title" @click="openModal(t)">{{ t.title }}</span>
+                        <router-link v-if="isOpenSunday(t)" to="/tournaments/cs2-2v2" class="badge-mini-hub">
+                          Hub ↗
+                        </router-link>
+                      </div>
                       <span class="event-sub">
                         {{ t.discipline }} • Hosted by {{ t.creator_name || 'AITU Esports' }}
                       </span>
@@ -224,6 +301,14 @@
                   </td>
                   <td class="col-action text-right">
                     <div class="action-cell-btns">
+                      <router-link 
+                        v-if="isOpenSunday(t)" 
+                        to="/tournaments/cs2-2v2" 
+                        class="btn-subtle text-amber" 
+                        title="Tournament Hub"
+                      >
+                        Hub ↗
+                      </router-link>
                       <button @click="openModal(t)" class="btn-subtle" title="Event Details">
                         Details
                       </button>
@@ -281,6 +366,14 @@
               </div>
 
               <div class="event-card-bottom">
+                <router-link 
+                  v-if="isOpenSunday(t)" 
+                  to="/tournaments/cs2-2v2" 
+                  class="btn-subtle text-amber"
+                  title="Open Tournament Hub"
+                >
+                  Hub ↗
+                </router-link>
                 <button @click="openModal(t)" class="btn-subtle">
                   Details
                 </button>
@@ -383,16 +476,120 @@
       <!-- Modal Dialog -->
       <transition name="fade">
         <div v-if="activeModalTournament" class="modal-overlay" @click.self="closeModal">
-          <div class="modal">
+          <div class="modal" :class="{ 'modal-wide': isOpenSunday(activeModalTournament) }">
             <div class="modal-top">
               <div class="modal-game-info">
                 <GameLogo :discipline="activeModalTournament.discipline" :size="28" />
                 <span class="modal-disc-label">{{ activeModalTournament.discipline }}</span>
+                <span v-if="isOpenSunday(activeModalTournament)" class="modal-mode-badge">Wingman 2v2</span>
               </div>
               <button @click="closeModal" class="btn-close">✕</button>
             </div>
 
-            <div class="modal-content">
+            <!-- Specialized view for Open Sunday Tournament CS2 2v2 -->
+            <div v-if="isOpenSunday(activeModalTournament)" class="modal-content modal-special-content">
+              <div class="modal-special-header">
+                <h2 class="modal-heading">{{ activeModalTournament.title }}</h2>
+                <p class="modal-sub-head">Fastcup (Astana) • AITU Gaming Club</p>
+
+                <!-- Stage Indicator Badges -->
+                <div class="modal-stage-badges">
+                  <div class="stage-chip chip-live">
+                    <span class="pulse-emerald"></span>
+                    <span>Сегодня: Онлайн-квалификация (до топ-8)</span>
+                  </div>
+                  <div class="stage-chip chip-lan">
+                    <span class="lan-icon">🏢</span>
+                    <span>Завтра: Оффлайн-финал (Top 8 LAN @ C.1.3.267P)</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Schedule / Timeline Module -->
+              <div class="modal-block">
+                <h4 class="block-title">Расписание этапов</h4>
+                <div class="modal-timeline-cards">
+                  <div class="modal-stage-box active-box">
+                    <div class="box-head">
+                      <span class="day-num">1</span>
+                      <div>
+                        <strong>Этап 1: Online Stage (Сегодня)</strong>
+                        <span class="box-sub">Fastcup • Single Elimination BO1</span>
+                      </div>
+                    </div>
+                    <ul class="box-points">
+                      <li><strong>Цель:</strong> Выход в топ-8.</li>
+                      <li><strong>Сетка:</strong> Останавливается после стадии 1/16 (1/64, 1/32, 1/16).</li>
+                      <li><strong>Локация:</strong> Онлайн / Дискорд AITU Gaming / Fastcup.</li>
+                    </ul>
+                  </div>
+
+                  <div class="modal-stage-box lan-box">
+                    <div class="box-head">
+                      <span class="day-num lan-num">2</span>
+                      <div>
+                        <strong>Этап 2: Offline Playoffs (Завтра)</strong>
+                        <span class="box-sub">Esport Club (кабинет C.1.3.267P)</span>
+                      </div>
+                    </div>
+                    <ul class="box-points">
+                      <li><strong>Участники:</strong> 8 команд-победителей онлайн-этапа.</li>
+                      <li><strong>Формат:</strong> 1/4 финала и 1/2 финала — BO1; Grand Final — BO3.</li>
+                      <li><strong>Оборудование:</strong> ПК клуба с предоставленных организаторами аккаунтов.</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bracket Section -->
+              <div class="modal-block">
+                <div class="block-title-row">
+                  <h4 class="block-title">Challonge Сетка Турнира</h4>
+                  <a href="https://challonge.com/aitu_gaming" target="_blank" rel="noopener noreferrer" class="link-ext">
+                    Открыть на Challonge.com ↗
+                  </a>
+                </div>
+                <div class="modal-iframe-wrap">
+                  <iframe 
+                    src="https://challonge.com/aitu_gaming/module" 
+                    width="100%" 
+                    height="500" 
+                    frameborder="0" 
+                    scrolling="auto" 
+                    allowtransparency="true" 
+                    class="rounded-xl border border-zinc-800 shadow-2xl bg-zinc-950 modal-challonge-frame"
+                  ></iframe>
+                </div>
+                <!-- Notice banner under bracket -->
+                <div class="bracket-notice-banner modal-notice">
+                  <div class="notice-icon-box">
+                    <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor">
+                      <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                    </svg>
+                  </div>
+                  <div class="notice-text">
+                    <strong>Важное уведомление:</strong>
+                    Команды, прошедшие в 1/4 финала (топ-8), завершают матчи на сегодня и получают инвайт на оффлайн-этап в C.1.3.267P на завтра.
+                  </div>
+                </div>
+              </div>
+
+              <!-- Regulations Update (Пункт 1.1 и 1.1.5) -->
+              <div class="modal-block">
+                <h4 class="block-title">Регламент соревнований (Пункт 1.1)</h4>
+                <div class="modal-rules-box">
+                  <p class="rule-quote">
+                    «1.1. Турнир состоит из двух этапов: квалификационный этап проходит в онлайн-формате на платформе Fastcup до определения 8 лучших команд. Финальный этап (топ-8) проводится в offline-формате в кабинете C.1.3.267P Esport Club».
+                  </p>
+                  <p class="rule-quote sub-quote">
+                    «1.1.5. Для онлайн-этапа игроки подключаются со своих устройств через Fastcup (серверы Астана). На оффлайн-этапе матчи проводятся на ПК клуба с предоставленных организаторами аккаунтов».
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Standard view for other tournaments -->
+            <div v-else class="modal-content">
               <h2 class="modal-heading">{{ activeModalTournament.title }}</h2>
 
               <div class="meta-grid">
@@ -466,6 +663,13 @@
 
             <div class="modal-actions">
               <button @click="closeModal" class="btn-subtle">Close</button>
+              <router-link 
+                v-if="isOpenSunday(activeModalTournament)" 
+                to="/tournaments/cs2-2v2" 
+                class="btn-modal-hub"
+              >
+                Открыть страницу хаба ↗
+              </router-link>
               <a 
                 :href="activeModalTournament.bot_registration_url" 
                 target="_blank" 
@@ -510,6 +714,33 @@ const sortBy = ref('date_asc')
 
 const activeModalTournament = ref(null)
 
+const openSundayTournament = ref({
+  id: 'open-sunday-cs2',
+  title: 'Open Sunday Tournament CS2 2v2',
+  discipline: 'CS2',
+  booking_date: new Date().toISOString().split('T')[0],
+  event_format: 'hybrid_single_elim_2x2',
+  format_label: 'Two-Day Hybrid • Single Elim • 2v2',
+  status: 'APPROVED',
+  creator_name: 'AITU Gaming Club',
+  bot_registration_url: 'https://t.me/aitu_gaming_bot?start=tourn_cs2_2v2',
+  is_past: false,
+  days_until: 0,
+  teams_count: 74,
+  location: 'Fastcup (Astana) & C.1.3.267P Esport Club',
+  is_special_hub: true,
+  hub_url: '/tournaments/cs2-2v2'
+})
+
+const isOpenSunday = (t) => {
+  if (!t) return false
+  return t.id === 'open-sunday-cs2' || (t.title && t.title.toLowerCase().includes('open sunday'))
+}
+
+const goToCs2Hub = () => {
+  router.push('/tournaments/cs2-2v2')
+}
+
 const isAuthenticated = computed(() => !!localStorage.getItem('access_token'))
 
 const availableDisciplines = [
@@ -543,16 +774,30 @@ const fetchTournaments = async () => {
     }
 
     const response = await axios.get('/api/tournaments', { params })
-    tournaments.value = response.data.items || []
-    total.value = response.data.total || 0
+    let items = response.data.items || []
     if (response.data.bot_username) {
       botUsername.value = response.data.bot_username
+      openSundayTournament.value.bot_registration_url = `https://t.me/${response.data.bot_username}?start=tourn_cs2_2v2`
     }
     if (response.data.stats) {
       stats.value = response.data.stats
     }
+
+    // Ensure Open Sunday Tournament is present
+    const hasOpenSunday = items.some(t => isOpenSunday(t))
+    if (!hasOpenSunday) {
+      if (!selectedDiscipline.value || selectedDiscipline.value === 'ALL' || selectedDiscipline.value === 'CS2') {
+        items.unshift({ ...openSundayTournament.value, bot_registration_url: `https://t.me/${botUsername.value}?start=tourn_cs2_2v2` })
+      }
+    }
+
+    tournaments.value = items
+    total.value = response.data.total || items.length
   } catch (error) {
     console.error('Failed to load tournaments:', error)
+    // Fallback item so UI always has Open Sunday CS2 2v2 available
+    tournaments.value = [{ ...openSundayTournament.value, bot_registration_url: `https://t.me/${botUsername.value}?start=tourn_cs2_2v2` }]
+    total.value = 1
   } finally {
     loading.value = false
   }
@@ -1756,10 +2001,586 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .header-left { gap: 1rem; }
-  .main-title { font-size: 1.5rem; }
-  .filter-panel { padding: 1rem; }
-  .search-bar-row { flex-direction: column; align-items: stretch; }
+  .header-inner {
+    padding: 0.65rem 1rem;
+    padding-top: max(0.65rem, var(--sat));
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .header-left {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .nav {
+    display: flex;
+    overflow-x: auto;
+    width: 100%;
+    padding-bottom: 0.35rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+  .nav-item {
+    padding: 0.4rem 0.65rem;
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .page-container {
+    padding: 1rem 0.85rem;
+  }
+  .title-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  .title-actions .btn-red-action {
+    width: 100%;
+    justify-content: center;
+  }
+  .main-title { font-size: 1.35rem; }
+  .filter-panel { padding: 0.85rem; }
+  .search-bar-row { flex-direction: column; align-items: stretch; gap: 0.6rem; }
   .search-box { max-width: 100%; }
+  .filter-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.25rem;
+    scrollbar-width: none;
+  }
+  .filter-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .filter-tab {
+    white-space: nowrap;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8rem;
+  }
+  .modal-box {
+    width: 95vw;
+    max-width: 95vw;
+    max-height: 90vh;
+    padding: 1.25rem;
+  }
+  .tournament-card {
+    padding: 1rem;
+  }
+  .card-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .card-stats {
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-inner {
+    padding: 0.5rem 0.75rem;
+  }
+  .page-container {
+    padding: 0.75rem 0.5rem;
+  }
+  .btn-tg span {
+    display: none;
+  }
+  .btn-tg {
+    padding: 0.4rem 0.5rem;
+  }
+}
+
+/* Mini Hub Badge in Lists */
+.title-with-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.badge-mini-hub {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.badge-mini-hub:hover {
+  background: rgba(245, 158, 11, 0.25);
+  color: #fbbf24;
+}
+
+.text-amber {
+  color: #f59e0b !important;
+  font-weight: 600 !important;
+}
+
+/* CS2 Title Card on Tournaments Page */
+.cs2-title-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(22, 27, 39, 0.95) 0%, rgba(13, 17, 26, 0.98) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 16px;
+  padding: 1.75rem 2rem;
+  margin-bottom: 1.75rem;
+  overflow: hidden;
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.6), 0 0 25px rgba(245, 158, 11, 0.08);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cs2-title-card:hover {
+  border-color: rgba(245, 158, 11, 0.55);
+  box-shadow: 0 12px 35px -5px rgba(0, 0, 0, 0.7), 0 0 30px rgba(245, 158, 11, 0.14);
+}
+
+.card-glow-layer {
+  position: absolute;
+  top: -50px;
+  right: -50px;
+  width: 280px;
+  height: 280px;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.2) 0%, rgba(239, 68, 68, 0.08) 50%, transparent 70%);
+  pointer-events: none;
+  filter: blur(35px);
+}
+
+.card-inner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.card-header-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.game-disc-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.3rem 0.8rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.disc-txt {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.wingman-txt {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.15);
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+}
+
+.format-pill-tag {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #94a3b8;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.card-main-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.card-text-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.card-main-title {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.card-main-title:hover {
+  color: #f59e0b;
+}
+
+.card-subtitle {
+  font-size: 0.98rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Stage Indicator Badges */
+.card-stage-badges, .modal-stage-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+}
+
+.stage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 1rem;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.chip-live {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(16, 185, 129, 0.08) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  color: #34d399;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
+}
+
+.chip-lan {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.16) 0%, rgba(239, 68, 68, 0.06) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.12);
+}
+
+.pulse-emerald {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  position: relative;
+}
+
+.pulse-emerald::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: #10b981;
+  opacity: 0.6;
+  animation: spin-pulse 1.8s infinite;
+}
+
+@keyframes spin-pulse {
+  0% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+.card-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.85rem 1.15rem;
+  border-radius: 10px;
+}
+
+.detail-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.85rem;
+}
+
+.cell-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: #64748b;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.cell-val {
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.card-actions-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.btn-card-hub {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #0f172a;
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.3);
+}
+
+.btn-card-hub:hover {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.45);
+}
+
+.btn-card-quick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #e2e8f0;
+  font-size: 0.86rem;
+  font-weight: 500;
+  padding: 0.6rem 1.1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-card-quick:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.btn-card-challonge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 0.6rem 1.1rem;
+  border-radius: 8px;
+  margin-left: auto;
+  transition: all 0.15s ease;
+}
+
+.btn-card-challonge:hover {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: rgba(56, 189, 248, 0.5);
+}
+
+/* Modal Wide Styles for Open Sunday CS2 2v2 */
+.modal-wide {
+  max-width: 900px !important;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-wide .modal-content {
+  overflow-y: auto;
+  max-height: calc(90vh - 140px);
+}
+
+.modal-mode-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.15);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+.modal-special-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.modal-sub-head {
+  font-size: 0.95rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.modal-timeline-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.modal-stage-box {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  padding: 1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.active-box {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.06) 0%, rgba(0, 0, 0, 0.35) 100%);
+}
+
+.lan-box {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.05) 0%, rgba(0, 0, 0, 0.35) 100%);
+}
+
+.box-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.day-num {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.lan-num {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.box-head strong {
+  display: block;
+  font-size: 0.95rem;
+  color: #fff;
+}
+
+.box-sub {
+  display: block;
+  font-size: 0.76rem;
+  color: #94a3b8;
+}
+
+.box-points {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: #cbd5e1;
+}
+
+.box-points li strong {
+  color: #f59e0b;
+}
+
+.block-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.link-ext {
+  font-size: 0.8rem;
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.modal-iframe-wrap {
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #090d16;
+  margin-bottom: 0.85rem;
+}
+
+.modal-challonge-frame {
+  display: block;
+  width: 100%;
+  height: 480px;
+  border: none;
+}
+
+.modal-notice {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.modal-rules-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.sub-quote {
+  border-left-color: #38bdf8 !important;
+}
+
+.btn-modal-hub {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #0f172a;
+  background: #f59e0b;
+  padding: 0.55rem 1.15rem;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
+}
+
+.btn-modal-hub:hover {
+  background: #fbbf24;
+}
+
+@media (max-width: 640px) {
+  .cs2-title-card {
+    padding: 1.25rem;
+  }
+  .card-main-title {
+    font-size: 1.4rem;
+  }
+  .card-actions-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .btn-card-challonge {
+    margin-left: 0;
+    justify-content: center;
+  }
 }
 </style>
+

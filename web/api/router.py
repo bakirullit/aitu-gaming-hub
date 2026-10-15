@@ -28,6 +28,7 @@ web_router.include_router(chats_router)
 
 # Public router (/api/*) - accessible without auth / client endpoints
 public_router = APIRouter(prefix="/api", redirect_slashes=False)
+public_router.include_router(auth_router)
 public_router.include_router(tournaments_router)
 public_router.include_router(mc_auth_router)
 public_router.include_router(mc_server_router)

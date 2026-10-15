@@ -10,8 +10,17 @@ from common.config import settings
 from common.database.session import db_manager
 from common.models.user import User
 from common.enums import UserRole
-from common.dtos.web import OTPRequest, OTPVerify, TokenResponse, UserResponse
+
+from common.dtos.web import (
+    OTPRequest,
+    OTPVerify,
+    TelegramWebAppAuthRequest,
+    TokenResponse,
+    UserResponse,
+)
+from common.utils.telegram_auth import validate_telegram_init_data
 from web.api.dependencies import get_db_session
+
 
 # We import runtime to access bot and redis instances injected at lifespan
 from core.lifespan import runtime
@@ -138,11 +147,103 @@ async def verify_otp(
         "sub": str(user.telegram_id),
         "role": role_val,
         "roles": user.roles or [],
+        "is_admin": is_admin,
         "exp": expire,
     }
     access_token = jwt.encode(jwt_payload, settings.JWT_SECRET, algorithm="HS256")
     
     return TokenResponse(
         access_token=access_token,
-        user=UserResponse.model_validate(user)
+        user=UserResponse.model_validate(user),
+        is_admin=is_admin,
     )
+
+
+@auth_router.post("/telegram/webapp", response_model=TokenResponse)
+async def auth_telegram_webapp(
+    payload: TelegramWebAppAuthRequest,
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Seamless authentication for Telegram Web App / Mini App.
+    Cryptographically validates initData using bot token via HMAC-SHA256.
+    Ensures user exists in the database and returns JWT session token.
+    """
+    bot_token = settings.BOT_TOKEN
+    try:
+        validated = validate_telegram_init_data(
+            init_data=payload.init_data,
+            bot_token=bot_token,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid Telegram Web App data: {str(exc)}"
+        )
+
+    tg_user = validated.get("user") or {}
+    telegram_id = tg_user.get("id")
+    if not telegram_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing telegram user ID in initData"
+        )
+
+    # Fetch user or create if new
+    stmt = select(User).where(User.telegram_id == int(telegram_id))
+    result = await session.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    first_name = tg_user.get("first_name") or ""
+    last_name = tg_user.get("last_name") or ""
+    username = tg_user.get("username")
+    now = datetime.now(timezone.utc)
+
+    if not user:
+        full_name = f"{first_name} {last_name}".strip() or username or "Telegram User"
+        user = User(
+            telegram_id=int(telegram_id),
+            username=username,
+            first_name=first_name or "Telegram User",
+            last_name=last_name or None,
+            full_name=full_name,
+            role="guest",
+            roles=[],
+            is_verified=False,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(user)
+    else:
+        # Update username/names if provided
+        if username and user.username != username:
+            user.username = username
+        if first_name and not user.first_name:
+            user.first_name = first_name
+        if last_name and not user.last_name:
+            user.last_name = last_name
+        user.updated_at = now
+
+    await session.commit()
+    await session.refresh(user)
+
+    is_admin = bool(user.is_admin)
+
+    # Issue JWT token
+    expire = datetime.now(timezone.utc) + timedelta(hours=settings.JWT_EXPIRE_HOURS)
+    role_val = user.role.value if hasattr(user.role, "value") else str(user.role)
+    jwt_payload = {
+        "sub": str(user.telegram_id),
+        "role": role_val,
+        "roles": user.roles or [],
+        "is_admin": is_admin,
+        "exp": expire,
+    }
+    access_token = jwt.encode(jwt_payload, settings.JWT_SECRET, algorithm="HS256")
+
+    return TokenResponse(
+        access_token=access_token,
+        user=UserResponse.model_validate(user),
+        is_admin=is_admin,
+    )
+

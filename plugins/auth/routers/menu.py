@@ -94,6 +94,32 @@ def setup_menu_router(core: CoreContext) -> Router:
         await callback.answer()
 
     # =========================================================================
+    # /app and /webapp handler
+    # =========================================================================
+
+    @router.message(F.text.in_({"/app", "/webapp"}))
+    async def cmd_webapp(message: Message) -> None:
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+        from common.config import settings
+
+        url = getattr(settings, "WEBAPP_URL", "https://aitu-gaming.y-not-devs.com")
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🎮 Открыть AITU Gaming Web App",
+                        web_app=WebAppInfo(url=url),
+                    )
+                ]
+            ]
+        )
+        await message.answer(
+            "Нажмите кнопку ниже для бесшовного входа в AITU Gaming Hub через Web App:",
+            reply_markup=keyboard,
+        )
+
+
+    # =========================================================================
     # Fallback handler
     # =========================================================================
 

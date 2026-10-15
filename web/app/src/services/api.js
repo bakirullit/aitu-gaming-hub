@@ -48,3 +48,10 @@ export const chatApi = {
   syncChat: (chatId) => api.post(`/admin/chats/${chatId}/sync`),
   createInviteLink: (chatId, data) => api.post(`/admin/chats/${chatId}/invite-link`, data),
 }
+
+export const authApi = {
+  requestOtp: (identifier) => api.post('/admin/auth/otp/request', { identifier }),
+  verifyOtp: (telegramId, code) => api.post('/admin/auth/otp/verify', { telegram_id: telegramId, code }),
+  loginTelegramWebApp: (initData) => api.post('/auth/telegram/webapp', { init_data: initData }),
+}
+

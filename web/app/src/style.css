@@ -27,6 +27,12 @@
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
+
+  /* Safe Area insets for Telegram Web App / Mobile notches */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
 }
 
 * {
@@ -35,19 +41,29 @@
   padding: 0;
 }
 
+html, body {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  background-color: var(--bg-color);
+}
+
 body {
   font-family: var(--font-family);
-  background-color: var(--bg-color);
   color: var(--text-primary);
-  min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #app {
   width: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
 button {
@@ -56,11 +72,13 @@ button {
   border: none;
   outline: none;
   background: none;
+  touch-action: manipulation;
 }
 
 input, select, textarea {
   font-family: inherit;
   outline: none;
+  font-size: 16px; /* Prevents auto-zoom on iOS Safari when tapping inputs */
 }
 
 a {
@@ -92,4 +110,37 @@ a {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent);
+}
+
+/* Mobile responsive horizontal scrolling helpers */
+.scroll-touch {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.scroll-touch::-webkit-scrollbar {
+  display: none;
+}
+
+/* Smooth modal backdrops */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+  padding-top: max(1rem, var(--sat));
+  padding-bottom: max(1rem, var(--sab));
+}
+
+@media (max-width: 640px) {
+  .modal-backdrop {
+    padding: 0.5rem;
+    align-items: flex-end;
+  }
 }

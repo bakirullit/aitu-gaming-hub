@@ -131,6 +131,20 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
             dp.start_polling(bot, allowed_updates=used_updates)
         )
 
+    # 7. Configure Telegram Chat Menu Button for seamless Web App access
+    if settings.WEBAPP_URL:
+        try:
+            from aiogram.types import MenuButtonWebApp, WebAppInfo
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="🎮 Hub",
+                    web_app=WebAppInfo(url=settings.WEBAPP_URL),
+                )
+            )
+            logger.info(f"Configured Telegram chat menu button for WebApp: {settings.WEBAPP_URL}")
+        except Exception as exc:
+            logger.debug(f"Could not configure Telegram chat menu button: {exc}")
+
     logger.info("AITU Gaming Hub Core is ready to process traffic.")
     try:
         yield

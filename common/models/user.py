@@ -72,6 +72,14 @@ class User(Base, TimestampMixin):
     def is_discipline_admin(self) -> bool:
         return self.has_role("discipline_admin", "head_admin")
 
+    @property
+    def is_admin(self) -> bool:
+        return (
+            self.is_discipline_admin
+            or self.has_role("head_admin", "discipline_admin", "admin", "staff")
+            or str(self.role).lower() in ["head_admin", "discipline_admin", "admin", "staff"]
+        )
+
     def get_staff_roles_display(self) -> list[str]:
         """Friendly display names for all user's staff sub-roles."""
         displayed: list[str] = []

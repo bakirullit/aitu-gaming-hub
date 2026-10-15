@@ -1016,8 +1016,66 @@ onMounted(() => {
   opacity: 0;
 }
 
-@media (max-width: 640px) {
-  .form-row { grid-template-columns: 1fr; }
-  .header-left { gap: 1rem; }
+@media (max-width: 768px) {
+  .header-inner {
+    padding: 0.65rem 1rem;
+    padding-top: max(0.65rem, var(--sat));
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .header-left {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .nav {
+    display: flex;
+    overflow-x: auto;
+    width: 100%;
+    padding-bottom: 0.35rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+  .nav-item {
+    padding: 0.4rem 0.65rem;
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+  .page-body {
+    padding: 1rem 0.85rem;
+  }
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  .toolbar-actions {
+    width: 100%;
+  }
+  .btn-create {
+    width: 100%;
+    justify-content: center;
+  }
+  .table-container {
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--radius-md);
+  }
+  .minimal-table {
+    min-width: 650px;
+  }
+  .modal-box {
+    width: 95vw;
+    max-width: 95vw;
+    margin: 1rem auto;
+    padding: 1.25rem;
+  }
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
 }
 </style>
+

@@ -1,4 +1,5 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, WebAppInfo
+from common.config import settings
 from common.dtos.screen import Screen
 from common.enums import STAFF_ROLE_TITLES
 from common.models.user import User
@@ -8,20 +9,24 @@ from common.texts import get_text
 def get_club_info_screen() -> Screen:
     """Screen: About AITU Gaming club for new users with 'Пройти регистрацию' button."""
     text = get_text("auth.club_info.text")
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text=get_text("auth.club_info.buttons.start_reg"), callback_data="auth:start_reg"),
-            ],
-            [
-                InlineKeyboardButton(text=get_text("auth.club_info.buttons.disciplines"), callback_data="nav:disciplines"),
-            ],
-            [
-                InlineKeyboardButton(text=get_text("auth.club_info.buttons.helpdesk"), callback_data="nav:helpdesk"),
-            ],
-        ]
-    )
+    buttons = [
+        [
+            InlineKeyboardButton(text=get_text("auth.club_info.buttons.start_reg"), callback_data="auth:start_reg"),
+        ],
+        [
+            InlineKeyboardButton(text=get_text("auth.club_info.buttons.disciplines"), callback_data="nav:disciplines"),
+        ],
+    ]
+    if getattr(settings, "WEBAPP_URL", None):
+        buttons.append([
+            InlineKeyboardButton(text="🌐 Открыть Hub (Web App)", web_app=WebAppInfo(url=settings.WEBAPP_URL)),
+        ])
+    buttons.append([
+        InlineKeyboardButton(text=get_text("auth.club_info.buttons.helpdesk"), callback_data="nav:helpdesk"),
+    ])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     return Screen(text=text, reply_markup=keyboard)
+
 
 
 def get_choose_role_screen() -> Screen:
@@ -265,11 +270,24 @@ def get_authorized_menu_screen(
     buttons.append([
         InlineKeyboardButton(text=get_text("auth.menu.buttons.profile"), callback_data="auth:profile"),
     ])
+
+    web_app_url = getattr(settings, "WEBAPP_URL", None)
+    if web_app_url:
+        buttons.append([
+            InlineKeyboardButton(text="🌐 Открыть AITU Web Hub", web_app=WebAppInfo(url=web_app_url)),
+        ])
+        if has_staff_privilege or can_book_tournaments:
+            admin_url = f"{web_app_url.rstrip('/')}/admin"
+            buttons.append([
+                InlineKeyboardButton(text="⚡ Админ Панель (Web)", web_app=WebAppInfo(url=admin_url)),
+            ])
+
     buttons.append([
         InlineKeyboardButton(text=get_text("auth.menu.buttons.helpdesk"), callback_data="nav:helpdesk"),
     ])
 
     return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+
 
 
 def get_profile_screen(user_data: dict) -> Screen:
