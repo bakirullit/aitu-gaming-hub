@@ -250,6 +250,27 @@
         </div>
       </div>
     </transition>
+
+    <!-- Confirmation Dialog (no QtWebEngine native confirm) -->
+    <transition name="fade">
+      <div v-if="confirmDialog.show" class="modal-backdrop" @click.self="confirmDialog.show = false">
+        <div class="modal-box confirm-box">
+          <div class="modal-header">
+            <h3>{{ confirmDialog.title }}</h3>
+            <button @click="confirmDialog.show = false" class="btn-close">✕</button>
+          </div>
+          <div class="confirm-body">
+            <p>{{ confirmDialog.message }}</p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" @click="confirmDialog.show = false" class="btn-subtle">Cancel</button>
+            <button type="button" @click="executeConfirm" class="btn-delete">
+              {{ confirmDialog.confirmText || 'Deactivate' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -275,6 +296,24 @@ const toast = ref({
   message: '',
   type: 'success',
 })
+
+// In-app confirmation dialog state
+const confirmDialog = ref({
+  show: false,
+  title: '',
+  message: '',
+  confirmText: 'Deactivate',
+  action: null,
+})
+
+const executeConfirm = async () => {
+  const action = confirmDialog.value.action
+  confirmDialog.value.show = false
+  if (action) {
+    await action()
+  }
+}
+
 
 const form = ref({
   slug: '',
@@ -473,17 +512,25 @@ async function saveDiscipline() {
   }
 }
 
-async function deactivateDiscipline(item) {
-  if (!confirm(`Are you sure you want to deactivate ${item.name}? Curator will be released.`)) return
-  try {
-    await disciplineApi.delete(item.slug)
-    showToast(`Discipline "${item.name}" deactivated.`)
-    await fetchDisciplines()
-    await fetchEligibleUsers()
-  } catch (err) {
-    showToast(err.response?.data?.detail || 'Failed to deactivate', 'error')
+function deactivateDiscipline(item) {
+  confirmDialog.value = {
+    show: true,
+    title: 'Деактивировать дисциплину',
+    message: `Вы уверены, что хотите деактивировать ${item.name}? Куратор будет освобожден.`,
+    confirmText: 'Деактивировать',
+    action: async () => {
+      try {
+        await disciplineApi.delete(item.slug)
+        showToast(`Дисциплина "${item.name}" деактивирована.`)
+        await fetchDisciplines()
+        await fetchEligibleUsers()
+      } catch (err) {
+        showToast(err.response?.data?.detail || 'Failed to deactivate', 'error')
+      }
+    }
   }
 }
+
 
 function logout() {
   localStorage.removeItem('access_token')
@@ -945,6 +992,33 @@ onMounted(() => {
 }
 
 .btn-close:hover { color: #fff; }
+
+.confirm-box {
+  max-width: 440px !important;
+  width: 95vw;
+}
+
+.confirm-body {
+  padding: 1.25rem 1.5rem;
+  font-size: 0.92rem;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.btn-delete {
+  background: var(--danger, #ef4444);
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-delete:hover {
+  background: var(--accent-hover, #dc2626);
+}
 
 .modal-body {
   padding: 1.5rem;

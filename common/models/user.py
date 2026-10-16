@@ -1,7 +1,8 @@
-from sqlalchemy import BigInteger, JSON, String
-from sqlalchemy.orm import Mapped, mapped_column, synonym
+from datetime import datetime
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum as SQLEnum, ForeignKey, JSON, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 from common.database.base import Base, TimestampMixin
-from common.enums import STAFF_ROLE_TITLES, UserRole
+from common.enums import STAFF_ROLE_TITLES, StaffRole, UserRole
 
 
 class User(Base, TimestampMixin):
@@ -31,6 +32,22 @@ class User(Base, TimestampMixin):
     steam_id: Mapped[str | None] = mapped_column(String(64), unique=True, index=True, nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # Staff role and mystery box / lootbox mechanics
+    staff_role: Mapped[StaffRole] = mapped_column(
+        SQLEnum(StaffRole, name="staffrole", values_callable=lambda x: [i.value for i in x], native_enum=False),
+        default=StaffRole.NONE,
+        nullable=False,
+    )
+    discipline_id: Mapped[str | None] = mapped_column(
+        String(32),
+        ForeignKey("disciplines.slug", ondelete="SET NULL"),
+        nullable=True,
+    )
+    is_role_revealed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    role_revealed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    discipline = relationship("Discipline", foreign_keys=[discipline_id], lazy="joined")
+
     student_barcode = synonym("barcode")
     gmail = synonym("email")
 
@@ -44,6 +61,9 @@ class User(Base, TimestampMixin):
         res: set[str] = set()
         if self.role:
             res.add(str(self.role).lower().replace(" ", "_"))
+        if self.staff_role and self.staff_role != StaffRole.NONE:
+            role_val = self.staff_role.value if hasattr(self.staff_role, "value") else str(self.staff_role)
+            res.add(role_val.lower().replace(" ", "_"))
         if self.roles and isinstance(self.roles, list):
             for r in self.roles:
                 if isinstance(r, str):

@@ -16,6 +16,9 @@ onMounted(async () => {
     try {
       twa.ready()
       twa.expand()
+      if (typeof twa.disableVerticalSwipes === 'function') {
+        twa.disableVerticalSwipes()
+      }
       if (typeof twa.setHeaderColor === 'function') twa.setHeaderColor('#0a0d14')
       if (typeof twa.setBackgroundColor === 'function') twa.setBackgroundColor('#0a0d14')
     } catch (e) {

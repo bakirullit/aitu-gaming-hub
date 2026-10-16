@@ -40,3 +40,22 @@ class TicketRepliedEvent(DomainEvent):
     user_id: int = 0
     admin_id: int = 0
     reply_text: str = ""
+
+
+@dataclass(frozen=True)
+class StaffPreCreatedEvent(DomainEvent):
+    """Fired when an administrator pre-creates a staff member record."""
+    pending_id: int = 0
+    first_name: str = ""
+    last_name: str = ""
+    staff_role: str = ""
+    discipline_id: str | None = None
+
+
+@dataclass(frozen=True)
+class UserRoleRevealedEvent(DomainEvent):
+    """Fired when a user opens their mystery box / reveals their staff role."""
+    user_id: int = 0
+    telegram_id: int = 0
+    staff_role: str = ""
+    discipline_id: str | None = None

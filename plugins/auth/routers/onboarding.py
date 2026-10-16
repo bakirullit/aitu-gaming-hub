@@ -26,6 +26,7 @@ from plugins.auth.screens import (
 from plugins.auth.states import AuthStates
 from services.auth_service import AuthService
 from services.steam_service import SteamService
+from services.user_service import UserService
 
 logger = logging.getLogger("plugins.auth.routers.onboarding")
 
@@ -458,6 +459,10 @@ def setup_onboarding_router(core: CoreContext) -> Router:
 
         await session.commit()
         await session.refresh(user)
+
+        # Claim pending staff role if pre-created by admin
+        await UserService(session).claim_pending_role_if_exists(user)
+
         await state.clear()
 
         # Render Main Authorized Menu
@@ -514,6 +519,10 @@ def setup_onboarding_router(core: CoreContext) -> Router:
 
         await session.commit()
         await session.refresh(user)
+
+        # Claim pending staff role if pre-created by admin
+        await UserService(session).claim_pending_role_if_exists(user)
+
         await state.clear()
 
         screen = get_user_home_screen(user)

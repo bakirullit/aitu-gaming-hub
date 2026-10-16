@@ -327,6 +327,25 @@ def get_profile_screen(user_data: dict) -> Screen:
     )
 
     buttons = []
+
+    # Check staff role & mystery box status
+    staff_role_raw = str(user_data.get("staff_role") or "none").lower().replace("staffrole.", "")
+    if staff_role_raw and staff_role_raw != "none":
+        is_revealed = bool(user_data.get("is_role_revealed"))
+        tma_lootbox_url = f"{settings.WEBAPP_URL.rstrip('/')}/lootbox"
+        if not is_revealed:
+            text += "\n\n🎁 <b>Вам назначена роль в Hub! Откройте кейс, чтобы узнать её.</b>"
+            buttons.append([
+                InlineKeyboardButton(text="🎁 Открыть Лутбокс Роли", web_app=WebAppInfo(url=tma_lootbox_url))
+            ])
+        else:
+            s_title = STAFF_ROLE_TITLES.get(staff_role_raw, staff_role_raw.title())
+            disc_label = f" ({user_data.get('discipline_name')})" if user_data.get("discipline_name") else ""
+            text += f"\n\n⚡ Должность: <b>{s_title}{disc_label}</b>"
+            buttons.append([
+                InlineKeyboardButton(text="🪪 Моя карточка роли", web_app=WebAppInfo(url=tma_lootbox_url))
+            ])
+
     if not user_data.get("steam_id"):
         buttons.append([InlineKeyboardButton(text=get_text("auth.profile.buttons.link_steam"), callback_data="auth:profile:link_steam")])
     if role_val in ["guest", "verified_guest"]:

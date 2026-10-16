@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from common.models.user import User
 from core.context import CoreContext
 from plugins.auth.rbac import clean_contact_markup, get_user_home_screen
+from services.user_service import UserService
 
 logger = logging.getLogger("plugins.auth.routers.menu")
 
@@ -23,6 +24,8 @@ def setup_menu_router(core: CoreContext) -> Router:
             stmt = select(User).where(User.telegram_id == user_id)
             res = await session.execute(stmt)
             user = res.scalar_one_or_none()
+            if user:
+                await UserService(session).claim_pending_role_if_exists(user)
             return get_user_home_screen(user)
 
     core.navigator.register_screen_renderer("home", render_home)  # type: ignore
@@ -57,6 +60,8 @@ def setup_menu_router(core: CoreContext) -> Router:
         stmt = select(User).where(User.telegram_id == user_id)
         res = await session.execute(stmt)
         user = res.scalar_one_or_none()
+        if user:
+            await UserService(session).claim_pending_role_if_exists(user)
 
         screen = get_user_home_screen(user)
         screen_id = "home" if (user and user.full_name) else "club_info"

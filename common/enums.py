@@ -22,6 +22,8 @@ class StaffRole(StrEnum):
     STREAMER = "streamer"
     COMMENTATOR = "commentator"
     COMMENTATER = "commentator"  # Backward compatibility alias
+    DESIGNER = "designer"
+    NONE = "none"
 
 
 STAFF_ROLE_TITLES: dict[str, str] = {
@@ -38,6 +40,8 @@ STAFF_ROLE_TITLES: dict[str, str] = {
     "streamer": "Streamer 🎥",
     "commentator": "Commentator 🎙️",
     "commentater": "Commentator 🎙️",
+    "designer": "Designer 🎨",
+    "none": "No Role 👤",
 }
 
 

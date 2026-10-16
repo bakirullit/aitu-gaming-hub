@@ -61,6 +61,11 @@ def build_user_profile_data(user: User | None, fallback_from_user: Any = None) -
         "is_verified": user.is_verified if user else False,
         "role": user.role if user else "guest",
         "roles": getattr(user, "roles", []) or [] if user else [],
+        "staff_role": getattr(user, "staff_role", None) if user else None,
+        "is_role_revealed": getattr(user, "is_role_revealed", False) if user else False,
+        "role_revealed_at": getattr(user, "role_revealed_at", None) if user else None,
+        "discipline_id": getattr(user, "discipline_id", None) if user else None,
+        "discipline_name": (user.discipline.name if (user and getattr(user, "discipline", None)) else getattr(user, "discipline_id", None)) if user else None,
     }
 
 

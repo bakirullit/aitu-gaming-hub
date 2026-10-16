@@ -55,3 +55,13 @@ export const authApi = {
   loginTelegramWebApp: (initData) => api.post('/auth/telegram/webapp', { init_data: initData }),
 }
 
+export const staffApi = {
+  getPending: () => api.get('/admin/staff/pending'),
+  createPending: (data) => api.post('/admin/staff/pending', data),
+  deletePending: (id) => api.delete(`/admin/staff/pending/${id}`),
+  importCsv: (formData) => api.post('/admin/staff/pending/import-csv', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  importText: (rawText) => api.post('/admin/staff/pending/import-text', { raw_text: rawText }),
+}
+

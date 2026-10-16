@@ -7,6 +7,7 @@ import Disciplines from '../views/Disciplines.vue'
 import Login from '../views/Login.vue'
 import Tournaments from '../views/Tournaments.vue'
 import TournamentHub from '../views/TournamentHub.vue'
+import Lootbox from '../views/Lootbox.vue'
 
 const routes = [
   { path: '/', redirect: '/tournaments' },
@@ -15,6 +16,7 @@ const routes = [
   { path: '/tournaments/open-sunday', component: TournamentHub },
   { path: '/tournaments/open-sunday-cs2', component: TournamentHub },
   { path: '/tournaments/hub', component: TournamentHub },
+  { path: '/lootbox', component: Lootbox },
   { path: '/admin/tournaments', component: Tournaments },
   { path: '/login', component: Login },
   { 

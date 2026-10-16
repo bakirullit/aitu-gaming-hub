@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
-from sqlalchemy import select, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 
+from common.dtos.events import StaffPreCreatedEvent, UserRoleRevealedEvent
+from common.enums import STAFF_ROLE_TITLES, StaffRole
+from common.models.pending_staff import PendingStaffMember
 from common.models.user import User
 from schemas.user import UserCreate, UserRole
 
@@ -204,4 +208,204 @@ class UserService:
             "telegram_id": telegram_id,
             "steam_id": steam_id,
         }
+
+    async def precreate_staff_member(
+        self,
+        first_name: str,
+        last_name: str,
+        staff_role: StaffRole,
+        academic_group: str | None = None,
+        barcode: str | None = None,
+        email: str | None = None,
+        corp_email: str | None = None,
+        phone_number: str | None = None,
+        username: str | None = None,
+        discipline_id: str | None = None,
+    ) -> PendingStaffMember:
+        """
+        Pre-creates a pending staff member profile.
+        If user is already registered in users table, attaches role directly.
+        """
+        clean_username = username.lstrip("@").strip().lower() if username else None
+        clean_email = email.strip().lower() if email else None
+        clean_corp_email = corp_email.strip().lower() if corp_email else None
+        clean_barcode = barcode.strip() if barcode else None
+
+        # Check uniqueness across pending_staff_members
+        if clean_barcode:
+            stmt = select(PendingStaffMember).where(PendingStaffMember.barcode == clean_barcode)
+            if (await self.session.execute(stmt)).scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Pending member with barcode '{clean_barcode}' already exists.",
+                )
+
+        if clean_email:
+            stmt = select(PendingStaffMember).where(PendingStaffMember.email == clean_email)
+            if (await self.session.execute(stmt)).scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Pending member with email '{clean_email}' already exists.",
+                )
+
+        if clean_corp_email:
+            stmt = select(PendingStaffMember).where(PendingStaffMember.corp_email == clean_corp_email)
+            if (await self.session.execute(stmt)).scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Pending member with corporate email '{clean_corp_email}' already exists.",
+                )
+
+        if clean_username:
+            stmt = select(PendingStaffMember).where(func.lower(PendingStaffMember.username) == clean_username)
+            if (await self.session.execute(stmt)).scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Pending member with username '@{clean_username}' already exists.",
+                )
+
+        # Check if user already exists in users table
+        existing_user: User | None = None
+        user_conds = []
+        if clean_barcode:
+            user_conds.append(User.barcode == clean_barcode)
+        if clean_email:
+            user_conds.append(func.lower(User.email) == clean_email)
+        if clean_corp_email:
+            user_conds.append(func.lower(User.email) == clean_corp_email)
+        if clean_username:
+            user_conds.append(func.lower(User.username) == clean_username)
+
+        if user_conds:
+            stmt_user = select(User).where(or_(*user_conds))
+            existing_user = (await self.session.execute(stmt_user)).scalars().first()
+
+        if existing_user:
+            existing_user.staff_role = staff_role
+            existing_user.discipline_id = discipline_id
+            existing_user.is_role_revealed = False
+            await self.session.commit()
+            await self.session.refresh(existing_user)
+            logger.info(
+                f"Directly linked pending staff role {staff_role} (discipline={discipline_id}) "
+                f"to existing user telegram_id={existing_user.telegram_id}"
+            )
+
+        pending = PendingStaffMember(
+            first_name=first_name.strip(),
+            last_name=last_name.strip(),
+            academic_group=academic_group.strip() if academic_group else None,
+            barcode=clean_barcode,
+            email=clean_email,
+            corp_email=clean_corp_email,
+            phone_number=phone_number.strip() if phone_number else None,
+            username=clean_username,
+            staff_role=staff_role,
+            discipline_id=discipline_id,
+        )
+
+        if not existing_user:
+            self.session.add(pending)
+            await self.session.commit()
+            await self.session.refresh(pending)
+            logger.info(f"Created PendingStaffMember id={pending.id} for {first_name} {last_name}")
+
+        await self._publish_event(
+            StaffPreCreatedEvent(
+                pending_id=pending.id if not existing_user else 0,
+                first_name=first_name,
+                last_name=last_name,
+                staff_role=staff_role.value if hasattr(staff_role, "value") else str(staff_role),
+                discipline_id=discipline_id,
+            )
+        )
+        return pending
+
+    async def claim_pending_role_if_exists(self, user: User) -> bool:
+        """
+        Searches pending_staff_members matching user by username, barcode, email, or corp_email.
+        If found, transfers staff_role and discipline_id to user, sets is_role_revealed=False,
+        removes the pending record, and commits.
+        """
+        conditions = []
+        if user.username:
+            clean_user_tag = user.username.lstrip("@").strip().lower()
+            conditions.append(func.lower(PendingStaffMember.username) == clean_user_tag)
+        if user.barcode:
+            conditions.append(PendingStaffMember.barcode == user.barcode.strip())
+        if user.email:
+            clean_email = user.email.strip().lower()
+            conditions.append(func.lower(PendingStaffMember.email) == clean_email)
+            conditions.append(func.lower(PendingStaffMember.corp_email) == clean_email)
+
+        if not conditions:
+            return False
+
+        stmt = select(PendingStaffMember).where(or_(*conditions))
+        result = await self.session.execute(stmt)
+        pending = result.scalars().first()
+
+        if not pending:
+            return False
+
+        user.staff_role = pending.staff_role
+        user.discipline_id = pending.discipline_id
+        user.is_role_revealed = False
+
+        await self.session.delete(pending)
+        await self.session.commit()
+        await self.session.refresh(user)
+        logger.info(
+            f"Claimed pending staff role {user.staff_role} (discipline={user.discipline_id}) "
+            f"for user telegram_id={user.telegram_id}"
+        )
+        return True
+
+    async def reveal_role(self, telegram_id: int) -> tuple[User, str, str | None]:
+        """
+        Reveals the assigned staff role for the user, sets is_role_revealed=True and role_revealed_at,
+        dispatches UserRoleRevealedEvent, and returns (user, localized_title, discipline_name).
+        """
+        user = await self.get_by_telegram_id(telegram_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User with Telegram ID {telegram_id} not found.",
+            )
+
+        if not user.is_role_revealed:
+            user.is_role_revealed = True
+            user.role_revealed_at = datetime.now(timezone.utc)
+            await self.session.commit()
+            await self.session.refresh(user)
+
+        role_key = (
+            user.staff_role.value if hasattr(user.staff_role, "value") else str(user.staff_role)
+        ).lower()
+        role_title = STAFF_ROLE_TITLES.get(role_key, role_key.title())
+
+        discipline_name = None
+        if user.discipline_id:
+            from common.models.discipline import Discipline
+            disc_res = await self.session.execute(select(Discipline.name).where(Discipline.slug == user.discipline_id))
+            discipline_name = disc_res.scalar_one_or_none() or user.discipline_id
+
+        await self._publish_event(
+            UserRoleRevealedEvent(
+                user_id=user.telegram_id,
+                telegram_id=user.telegram_id,
+                staff_role=role_key,
+                discipline_id=user.discipline_id,
+            )
+        )
+        logger.info(f"User {telegram_id} revealed staff role: {role_title} ({discipline_name})")
+        return user, role_title, discipline_name
+
+    async def _publish_event(self, event: Any) -> None:
+        try:
+            from core.lifespan import runtime
+            if runtime.core and runtime.core.event_bus:
+                await runtime.core.event_bus.publish(event)
+        except Exception as exc:
+            logger.warning(f"Could not publish domain event {event}: {exc}")
 

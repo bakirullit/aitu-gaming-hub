@@ -38,6 +38,10 @@ def setup_profile_router(core: CoreContext) -> Router:
         stmt = select(User).where(User.telegram_id == user_id)
         user = (await session.execute(stmt)).scalar_one_or_none()
 
+        if user:
+            user_service = UserService(session)
+            await user_service.claim_pending_role_if_exists(user)
+
         user_data = build_user_profile_data(user, callback.from_user)
         screen = get_profile_screen(user_data)
         await core.navigator.render(

@@ -9,6 +9,7 @@ from common.models.ticket import HelpdeskTicket
 from common.models.tournament import DisciplineAdmin, TournamentBooking
 from common.models.discipline import Discipline, DisciplineTier
 from common.models.chat import TelegramChat
+from common.models.pending_staff import PendingStaffMember
 
 __all__ = [
     "User",
@@ -22,6 +23,7 @@ __all__ = [
     "Discipline",
     "DisciplineTier",
     "TelegramChat",
+    "PendingStaffMember",
 ]
 
 
