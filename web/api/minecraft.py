@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -832,4 +832,249 @@ minecraft_router = SlashRouter(prefix="/api", redirect_slashes=False)
 minecraft_router.include_router(mc_auth_router)
 minecraft_router.include_router(mc_server_router)
 minecraft_router.include_router(mc_friends_router)
+
+
+# =========================================================================
+# Admin Minecraft Management Router (/api/admin/minecraft)
+# =========================================================================
+
+from web.api.dependencies import get_current_admin
+from pydantic import BaseModel, Field
+
+minecraft_admin_router = APIRouter(prefix="/minecraft", tags=["Admin Minecraft"])
+
+
+class MinecraftAdminWhitelistAddRequest(BaseModel):
+    nickname: str = Field(..., min_length=3, max_length=32)
+    barcode: Optional[str] = Field(None, description="Optional 6-digit student barcode to link")
+
+
+class MinecraftRconCommandRequest(BaseModel):
+    command: str = Field(..., min_length=1, max_length=256)
+
+
+@minecraft_admin_router.get("/status")
+async def get_minecraft_admin_status(
+    session: AsyncSession = Depends(get_db_session),
+    admin: User = Depends(get_current_admin),
+):
+    """Returns server status, RCON connectivity, and whitelist counts."""
+    whitelist_count = (await session.execute(select(func.count(MinecraftWhitelist.id)))).scalar_one() or 0
+    active_whitelist_count = (
+        await session.execute(
+            select(func.count(MinecraftWhitelist.id)).where(MinecraftWhitelist.is_active == True)
+        )
+    ).scalar_one() or 0
+    active_sessions_count = (
+        await session.execute(
+            select(func.count(MinecraftSession.id)).where(MinecraftSession.is_active == True)
+        )
+    ).scalar_one() or 0
+
+    # Test RCON connection
+    rcon_ok = False
+    rcon_output = "Offline"
+    players_online = 0
+    max_players = 100
+    try:
+        if settings.MINECRAFT_RCON_PASSWORD:
+            res = await execute_rcon_with_budget(
+                host=getattr(settings, "MINECRAFT_HOST", "127.0.0.1"),
+                port=settings.MINECRAFT_RCON_PORT,
+                password=settings.MINECRAFT_RCON_PASSWORD,
+                command="list",
+                total_timeout=1.0,
+            )
+            rcon_ok = True
+            rcon_output = res or "OK"
+            # Parse list output e.g. "There are 2 of a max of 100 players online: player1, player2"
+            match = re.search(r"(\d+)\s+(?:of a max of|/)\s+(\d+)", res)
+            if match:
+                players_online = int(match.group(1))
+                max_players = int(match.group(2))
+    except Exception as exc:
+        rcon_output = f"Connection failed: {str(exc)}"
+
+    return {
+        "online": rcon_ok,
+        "server_host": getattr(settings, "MINECRAFT_SERVER_IP", "mc.aitu-gaming.y-not-devs.com:25565"),
+        "server_port": getattr(settings, "MINECRAFT_RCON_PORT", 25575),
+        "rcon_online": rcon_ok,
+        "rcon_output": rcon_output,
+        "players_online": players_online,
+        "max_players": max_players,
+        "whitelist_count": whitelist_count,
+        "active_whitelist_count": active_whitelist_count,
+        "active_sessions_count": active_sessions_count,
+        "server_version": getattr(settings, "MINECRAFT_SERVER_VERSION", "Create 1.21.1 NeoForge"),
+    }
+
+
+@minecraft_admin_router.get("/whitelist")
+async def list_minecraft_whitelist(
+    query: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    session: AsyncSession = Depends(get_db_session),
+    admin: User = Depends(get_current_admin),
+):
+    """Lists whitelisted players with linked student profiles."""
+    stmt = (
+        select(MinecraftWhitelist, User)
+        .outerjoin(User, User.telegram_id == MinecraftWhitelist.user_id)
+    )
+
+    if query:
+        pattern = f"%{query}%"
+        stmt = stmt.where(
+            or_(
+                MinecraftWhitelist.nickname.ilike(pattern),
+                User.first_name.ilike(pattern),
+                User.last_name.ilike(pattern),
+                User.barcode.ilike(pattern),
+                User.academic_group.ilike(pattern),
+                User.username.ilike(pattern),
+            )
+        )
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = (await session.execute(count_stmt)).scalar_one()
+
+    stmt = stmt.order_by(MinecraftWhitelist.created_at.desc()).limit(limit).offset(offset)
+    results = (await session.execute(stmt)).all()
+
+    items = []
+    for wl, user in results:
+        items.append({
+            "id": wl.id,
+            "nickname": wl.nickname,
+            "is_active": wl.is_active,
+            "user_id": wl.user_id,
+            "created_at": wl.created_at,
+            "student_name": f"{user.first_name or ''} {user.last_name or ''}".strip() if user else None,
+            "barcode": user.barcode if user else None,
+            "academic_group": user.academic_group if user else None,
+            "username": user.username if user else None,
+        })
+
+    return {
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@minecraft_admin_router.post("/whitelist")
+async def add_minecraft_whitelist(
+    payload: MinecraftAdminWhitelistAddRequest,
+    session: AsyncSession = Depends(get_db_session),
+    admin: User = Depends(get_current_admin),
+):
+    clean_nick = payload.nickname.strip()
+    # Check duplicate
+    stmt = select(MinecraftWhitelist).where(func.lower(MinecraftWhitelist.nickname) == clean_nick.lower())
+    existing = (await session.execute(stmt)).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Ник '{clean_nick}' уже есть в вайтлисте")
+
+    user_id = admin.telegram_id
+    if payload.barcode:
+        bc_stmt = select(User).where(or_(User.barcode == payload.barcode, User.student_barcode == payload.barcode))
+        linked_user = (await session.execute(bc_stmt)).scalar_one_or_none()
+        if linked_user:
+            user_id = linked_user.telegram_id
+
+    entry = MinecraftWhitelist(
+        user_id=user_id,
+        nickname=clean_nick,
+        is_active=True,
+    )
+    session.add(entry)
+    await session.commit()
+    await session.refresh(entry)
+
+    # RCON whitelist add
+    rcon_msg = None
+    try:
+        if settings.MINECRAFT_RCON_PASSWORD:
+            rcon_msg = await execute_rcon_with_budget(
+                host=getattr(settings, "MINECRAFT_HOST", "127.0.0.1"),
+                port=settings.MINECRAFT_RCON_PORT,
+                password=settings.MINECRAFT_RCON_PASSWORD,
+                command=f"whitelist add {clean_nick}",
+                total_timeout=1.0,
+            )
+    except Exception as exc:
+        logger.warning(f"RCON whitelist add failed: {exc}")
+
+    return {
+        "status": "ok",
+        "id": entry.id,
+        "nickname": entry.nickname,
+        "rcon_response": rcon_msg,
+    }
+
+
+@minecraft_admin_router.delete("/whitelist/{entry_id}")
+async def remove_minecraft_whitelist(
+    entry_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    admin: User = Depends(get_current_admin),
+):
+    stmt = select(MinecraftWhitelist).where(MinecraftWhitelist.id == entry_id)
+    entry = (await session.execute(stmt)).scalar_one_or_none()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Вайтлист запись не найдена")
+
+    nick = entry.nickname
+    await session.delete(entry)
+    await session.commit()
+
+    # RCON whitelist remove
+    rcon_msg = None
+    try:
+        if settings.MINECRAFT_RCON_PASSWORD:
+            rcon_msg = await execute_rcon_with_budget(
+                host=getattr(settings, "MINECRAFT_HOST", "127.0.0.1"),
+                port=settings.MINECRAFT_RCON_PORT,
+                password=settings.MINECRAFT_RCON_PASSWORD,
+                command=f"whitelist remove {nick}",
+                total_timeout=1.0,
+            )
+    except Exception as exc:
+        logger.warning(f"RCON whitelist remove failed: {exc}")
+
+    return {
+        "status": "ok",
+        "deleted_nickname": nick,
+        "rcon_response": rcon_msg,
+    }
+
+
+@minecraft_admin_router.post("/rcon")
+async def execute_rcon_command(
+    payload: MinecraftRconCommandRequest,
+    admin: User = Depends(get_current_admin),
+):
+    cmd = payload.command.strip().lstrip("/")
+    if not settings.MINECRAFT_RCON_PASSWORD:
+        raise HTTPException(status_code=503, detail="RCON credentials are not configured in settings")
+
+    try:
+        res = await execute_rcon_with_budget(
+            host=getattr(settings, "MINECRAFT_HOST", "127.0.0.1"),
+            port=settings.MINECRAFT_RCON_PORT,
+            password=settings.MINECRAFT_RCON_PASSWORD,
+            command=cmd,
+            total_timeout=2.0,
+        )
+        return {
+            "status": "ok",
+            "command": cmd,
+            "response": res or "Command executed successfully (no output)",
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"RCON execution error: {str(exc)}")
+
 

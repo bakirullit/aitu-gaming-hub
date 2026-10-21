@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: Literal["development", "production", "testing"] = "development"
     LOG_LEVEL: str = "INFO"
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    PORT: int = 5000
 
     # Telegram Bot
     BOT_TOKEN: str = Field(default="mock_token_for_tests")

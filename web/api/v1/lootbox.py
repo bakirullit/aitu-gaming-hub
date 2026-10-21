@@ -1,61 +1,69 @@
 import logging
 from typing import Any
 from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+import jwt
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from common.config import settings
 from common.enums import STAFF_ROLE_TITLES, StaffRole
+from common.models.discipline import Discipline
 from common.models.user import User
+from common.utils.telegram_auth import validate_telegram_init_data
 from services.user_service import UserService
-from web.api.dependencies import get_auth_service, get_current_user, get_db_session, get_user_service
+from web.api.dependencies import get_current_user, get_db_session, get_user_service
 
 logger = logging.getLogger("web.api.v1.lootbox")
 
 lootbox_router = APIRouter(prefix="/v1/lootbox", tags=["Lootbox"])
 
+security_optional = HTTPBearer(auto_error=False)
+
 
 async def resolve_tma_or_bearer_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security_optional),
     x_telegram_init_data: str | None = Header(None, alias="X-Telegram-Init-Data"),
-    current_user: User | None = Depends(lambda: None),
     session: AsyncSession = Depends(get_db_session),
-    auth_service = Depends(get_auth_service),
     user_service: UserService = Depends(get_user_service),
 ) -> User:
     """
-    Resolves the authenticated user from Bearer JWT or Telegram WebApp initData header.
+    Resolves user either from Bearer JWT or cryptographically validated Telegram WebApp initData.
     """
-    # 1. Check Bearer token from header first
-    try:
-        from fastapi.security import HTTPBearer
-        from web.api.dependencies import get_current_user as dep_current_user
-        # We manually call if authorization header is present
-    except Exception:
-        pass
-
-    # If already resolved via standard dependency
-    if current_user:
-        return current_user
-
-    # Fallback to Telegram WebApp initData
-    if x_telegram_init_data:
+    if credentials and credentials.credentials:
         try:
-            init_data = auth_service.validate_telegram_webapp_init_data(x_telegram_init_data)
-            tg_id = init_data.get("user", {}).get("id")
-            if tg_id:
-                user = await user_service.get_by_telegram_id(int(tg_id))
+            payload = jwt.decode(credentials.credentials, settings.JWT_SECRET, algorithms=["HS256"])
+            telegram_id_str = payload.get("sub")
+            if telegram_id_str:
+                user = await user_service.get_by_telegram_id(int(telegram_id_str))
                 if user:
                     return user
         except Exception as exc:
-            logger.debug(f"Could not authenticate via X-Telegram-Init-Data: {exc}")
+            logger.debug(f"Bearer token decode failed: {exc}")
+
+    if x_telegram_init_data:
+        try:
+            parsed = validate_telegram_init_data(x_telegram_init_data, settings.BOT_TOKEN)
+            tg_user = parsed.get("user")
+            if tg_user and isinstance(tg_user, dict):
+                tg_id = tg_user.get("id")
+                if tg_id:
+                    user = await user_service.get_by_telegram_id(int(tg_id))
+                    if user:
+                        return user
+        except Exception as exc:
+            logger.debug(f"validate_telegram_init_data failed: {exc}")
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Authentication required (Bearer token or Telegram initData)",
+        detail="Требуется авторизация (Bearer токен или Telegram WebApp)",
     )
 
 
 @lootbox_router.get("/status")
 async def get_lootbox_status(
     current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
     user_service: UserService = Depends(get_user_service),
 ) -> dict[str, Any]:
     """Returns current user's mystery box / staff role status."""

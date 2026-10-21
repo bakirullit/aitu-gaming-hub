@@ -16,6 +16,8 @@ def get_user_home_screen(user: User | None) -> Screen:
     otherwise renders the guest welcome/club info screen.
     """
     if user and user.full_name:
+        staff_role_val = getattr(user, "staff_role", None)
+        role_str = staff_role_val.value if hasattr(staff_role_val, "value") else str(staff_role_val or "")
         return get_authorized_menu_screen(
             full_name=user.full_name,
             role=user.role,
@@ -24,6 +26,9 @@ def get_user_home_screen(user: User | None) -> Screen:
             roles=getattr(user, "roles", []) or [],
             is_discipline_admin=getattr(user, "is_discipline_admin", False),
             is_staff=getattr(user, "is_staff", False),
+            staff_role=role_str,
+            is_role_revealed=getattr(user, "is_role_revealed", False),
+            discipline_name=getattr(user, "discipline_id", None),
         )
     return get_club_info_screen()
 

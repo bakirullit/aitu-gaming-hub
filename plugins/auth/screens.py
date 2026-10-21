@@ -107,7 +107,7 @@ def get_phone_reply_keyboard() -> ReplyKeyboardMarkup:
 
 
 def get_gmail_screen(full_name: str, phone: str) -> Screen:
-    """State: INPUT_GMAIL - Prompt for Google email strictly @gmail.com."""
+    """State: INPUT_GMAIL - Prompt for email address."""
     text = get_text("auth.gmail.text", full_name=full_name, phone=phone)
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -210,6 +210,9 @@ def get_authorized_menu_screen(
     roles: list[str] | None = None,
     is_discipline_admin: bool = False,
     is_staff: bool = False,
+    staff_role: str | None = None,
+    is_role_revealed: bool = False,
+    discipline_name: str | None = None,
 ) -> Screen:
     """Screen: Main Club Menu (Authorized). Role-based layout."""
     roles_list = [str(r).lower().replace(" ", "_") for r in (roles or [])]
@@ -249,11 +252,29 @@ def get_authorized_menu_screen(
 
     text = get_text("auth.menu.text", full_name=full_name or "Игрок", status_label=status_label)
 
-    buttons = [
-        [
-            InlineKeyboardButton(text=get_text("auth.menu.buttons.disciplines"), callback_data="nav:disciplines"),
-        ],
-    ]
+    staff_role_norm = str(staff_role or "").lower().replace("staffrole.", "")
+    has_unrevealed_role = bool(staff_role_norm and staff_role_norm != "none" and not is_role_revealed)
+
+    if has_unrevealed_role:
+        text += (
+            "\n\n🎁 <b>Вам назначена секретная роль в клубе AITU Gaming!</b>\n"
+            "Откройте кейс роли, чтобы узнать свою должность и получить доступ к функциям стаффа."
+        )
+
+    buttons = []
+
+    web_app_url = getattr(settings, "WEBAPP_URL", None)
+    tma_lootbox_url = f"{web_app_url.rstrip('/')}/lootbox" if web_app_url else None
+
+    # Top priority button: Lootbox role reveal
+    if has_unrevealed_role and tma_lootbox_url:
+        buttons.append([
+            InlineKeyboardButton(text="🎁 Открыть Лутбокс Роли", web_app=WebAppInfo(url=tma_lootbox_url)),
+        ])
+
+    buttons.append([
+        InlineKeyboardButton(text=get_text("auth.menu.buttons.disciplines"), callback_data="nav:disciplines"),
+    ])
 
     # Tournament booking button is ONLY shown if user is discipline_admin or head_admin!
     if can_book_tournaments:
@@ -271,7 +292,6 @@ def get_authorized_menu_screen(
         InlineKeyboardButton(text=get_text("auth.menu.buttons.profile"), callback_data="auth:profile"),
     ])
 
-    web_app_url = getattr(settings, "WEBAPP_URL", None)
     if web_app_url:
         buttons.append([
             InlineKeyboardButton(text="🌐 Открыть AITU Web Hub", web_app=WebAppInfo(url=web_app_url)),
@@ -282,10 +302,38 @@ def get_authorized_menu_screen(
                 InlineKeyboardButton(text="⚡ Админ Панель (Web)", web_app=WebAppInfo(url=admin_url)),
             ])
 
+    # If role already revealed, provide direct link to view role card
+    if staff_role_norm and staff_role_norm != "none" and is_role_revealed and tma_lootbox_url:
+        buttons.append([
+            InlineKeyboardButton(text="🪪 Моя карточка роли", web_app=WebAppInfo(url=tma_lootbox_url)),
+        ])
+
     buttons.append([
         InlineKeyboardButton(text=get_text("auth.menu.buttons.helpdesk"), callback_data="nav:helpdesk"),
     ])
 
+    return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+
+
+def get_staff_mystery_box_screen(user: User) -> Screen:
+    """Dedicated screen rendered immediately after registration when a staff role is waiting to be revealed."""
+    web_app_url = getattr(settings, "WEBAPP_URL", "https://aitu-gaming.y-not-devs.com")
+    tma_lootbox_url = f"{web_app_url.rstrip('/')}/lootbox"
+    first_name = user.first_name or (user.full_name.split()[0] if user.full_name else "Игрок")
+    text = (
+        f"🎉 <b>Поздравляем с регистрацией, {first_name}!</b>\n\n"
+        "🎁 <b>Вам назначена секретная роль в команде AITU Gaming!</b>\n"
+        "Администрация подготовила для вас персональный кейс с должностью.\n\n"
+        "Нажмите кнопку ниже, чтобы открыть лутбокс и узнать свою роль!"
+    )
+    buttons = [
+        [
+            InlineKeyboardButton(text="🎁 Открыть Лутбокс Роли", web_app=WebAppInfo(url=tma_lootbox_url)),
+        ],
+        [
+            InlineKeyboardButton(text="🏠 В главное меню", callback_data="nav:home"),
+        ],
+    ]
     return Screen(text=text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 

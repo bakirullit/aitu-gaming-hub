@@ -1,26 +1,6 @@
 <template>
   <div class="disciplines-page">
-    <!-- Minimalist Header -->
-    <header class="header">
-      <div class="header-inner">
-        <div class="header-left">
-          <router-link to="/admin" class="logo">
-            <img src="/logo.png" alt="AITU Gaming" class="brand-logo" />
-            <span class="logo-pill">Disciplines</span>
-          </router-link>
-          <nav class="nav">
-            <router-link to="/tournaments" class="nav-item">Tournaments</router-link>
-            <router-link to="/admin" class="nav-item">Members</router-link>
-            <router-link to="/admin/disciplines" class="nav-item active">Disciplines</router-link>
-            <router-link to="/admin/chats" class="nav-item">Telegram Chats</router-link>
-          </nav>
-        </div>
-        <div class="header-right">
-          <span class="admin-user">{{ currentUser?.first_name || 'Admin' }}</span>
-          <button @click="logout" class="btn-ghost text-danger">Logout</button>
-        </div>
-      </div>
-    </header>
+    <AdminNav />
 
     <!-- Toast Notification Banner -->
     <transition name="fade">
@@ -279,6 +259,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { disciplineApi, userApi, chatApi } from '../services/api'
 import GameLogo from '../components/GameLogo.vue'
+import AdminNav from '../components/AdminNav.vue'
 
 const router = useRouter()
 const currentUser = ref(null)

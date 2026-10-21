@@ -38,7 +38,7 @@
       }
     },
     "gmail": {
-      "text": "📧 <b>Введите личную почту Google (@gmail.com)</b>\n\nФИО: <b>{full_name}</b> ✅\nТелефон: <code>{phone}</code> ✅\n\nВведите адрес электронной почты Google.\n⚠️ <i>Домен строго: <code>@gmail.com</code></i>\n\n<i>Пример: student.aitu@gmail.com</i>",
+      "text": "📧 <b>Введите адрес электронной почты</b>\n\nФИО: <b>{full_name}</b> ✅\nТелефон: <code>{phone}</code> ✅\n\nВведите адрес вашей электронной почты.\n\n<i>Пример: student@astanait.edu.kz или user@gmail.com</i>",
       "buttons": {
         "cancel": "🚫 Отмена"
       }

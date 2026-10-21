@@ -1,26 +1,6 @@
 <template>
   <div class="admin-container">
-    <!-- Minimalist Header -->
-    <header class="header">
-      <div class="header-inner">
-        <div class="header-left">
-          <router-link to="/admin" class="logo">
-            <img src="/logo.png" alt="AITU Gaming" class="brand-logo" />
-            <span class="logo-pill">Admin</span>
-          </router-link>
-          <nav class="nav">
-            <router-link to="/tournaments" class="nav-item">Tournaments</router-link>
-            <router-link to="/admin" class="nav-item active">Members</router-link>
-            <router-link to="/admin/disciplines" class="nav-item">Disciplines</router-link>
-            <router-link to="/admin/chats" class="nav-item">Telegram Chats</router-link>
-          </nav>
-        </div>
-        <div class="header-right">
-          <span class="admin-user">{{ currentUser?.first_name || 'Admin' }}</span>
-          <button @click="logout" class="btn-ghost text-danger">Logout</button>
-        </div>
-      </div>
-    </header>
+    <AdminNav />
 
     <!-- Toast Notification Banner -->
     <transition name="fade">
@@ -245,7 +225,7 @@
             <div class="form-row">
               <div class="form-group">
                 <label>Personal Email</label>
-                <input v-model="precreateForm.email" type="email" placeholder="student@gmail.com" class="form-input" />
+                <input v-model="precreateForm.email" type="email" placeholder="student@example.com" class="form-input" />
               </div>
               <div class="form-group">
                 <label>Corporate Email (@astanait.edu.kz)</label>
@@ -402,6 +382,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import AdminNav from '../components/AdminNav.vue'
 import api, { staffApi, disciplineApi } from '../services/api'
 
 const router = useRouter()

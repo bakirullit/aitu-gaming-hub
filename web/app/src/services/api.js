@@ -65,3 +65,52 @@ export const staffApi = {
   importText: (rawText) => api.post('/admin/staff/pending/import-text', { raw_text: rawText }),
 }
 
+export const helpdeskApi = {
+  getTickets: (params) => api.get('/admin/helpdesk/tickets', { params }),
+  getTicket: (id) => api.get(`/admin/helpdesk/tickets/${id}`),
+  replyTicket: (id, data) => api.post(`/admin/helpdesk/tickets/${id}/reply`, data),
+  updateStatus: (id, status) => api.patch(`/admin/helpdesk/tickets/${id}/status`, { status }),
+}
+
+export const tournamentAdminApi = {
+  getTournaments: (params) => api.get('/admin/tournaments', { params }),
+  createTournament: (data) => api.post('/admin/tournaments', data),
+  approveTournament: (id) => api.post(`/admin/tournaments/${id}/approve`),
+  rejectTournament: (id, reason) => api.post(`/admin/tournaments/${id}/reject`, { reason }),
+  deleteTournament: (id) => api.delete(`/admin/tournaments/${id}`),
+}
+
+export const minecraftAdminApi = {
+  getStatus: () => api.get('/admin/minecraft/status'),
+  getWhitelist: (params) => api.get('/admin/minecraft/whitelist', { params }),
+  addWhitelist: (data) => api.post('/admin/minecraft/whitelist', data),
+  removeWhitelist: (id) => api.delete(`/admin/minecraft/whitelist/${id}`),
+  executeRcon: (command) => api.post('/admin/minecraft/rcon', { command }),
+}
+
+export const dashboardApi = {
+  getStats: () => api.get('/admin/dashboard/stats'),
+}
+
+export const broadcastApi = {
+  getAudiences: () => api.get('/admin/broadcast/audiences'),
+  send: (data) => api.post('/admin/broadcast/send', data),
+}
+
+export const lootboxAdminApi = {
+  getOverview: () => api.get('/admin/staff/lootbox/overview'),
+  reseal: (userId) => api.post(`/admin/staff/lootbox/reseal/${userId}`),
+  reveal: (userId) => api.post(`/admin/staff/lootbox/reveal/${userId}`),
+}
+
+export const logsApi = {
+  getHealth: () => api.get('/admin/logs/health'),
+  getAudit: () => api.get('/admin/logs/audit'),
+}
+
+export const settingsApi = {
+  getSettings: () => api.get('/admin/settings'),
+  updateSettings: (data) => api.post('/admin/settings', data),
+}
+
+

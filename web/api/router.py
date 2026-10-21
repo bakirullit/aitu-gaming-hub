@@ -20,6 +20,13 @@ from web.api.minecraft import (
 )
 from web.api.staff import staff_admin_router
 from web.api.v1.lootbox import lootbox_router
+from web.api.helpdesk import helpdesk_admin_router
+from web.api.tournaments import tournaments_admin_router
+from web.api.minecraft import minecraft_admin_router
+from web.api.dashboard import dashboard_admin_router
+from web.api.broadcast import broadcast_admin_router
+from web.api.logs import logs_admin_router
+from web.api.settings import settings_admin_router
 from core.lifespan import runtime
 
 # Admin-only router (/api/admin/*)
@@ -28,6 +35,13 @@ web_router.include_router(auth_router)
 web_router.include_router(disciplines_router)
 web_router.include_router(chats_router)
 web_router.include_router(staff_admin_router)
+web_router.include_router(helpdesk_admin_router)
+web_router.include_router(tournaments_admin_router)
+web_router.include_router(minecraft_admin_router)
+web_router.include_router(dashboard_admin_router)
+web_router.include_router(broadcast_admin_router)
+web_router.include_router(logs_admin_router)
+web_router.include_router(settings_admin_router)
 
 # Public router (/api/*) - accessible without auth / client endpoints
 public_router = APIRouter(prefix="/api", redirect_slashes=False)

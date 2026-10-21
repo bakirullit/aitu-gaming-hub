@@ -54,9 +54,10 @@ services:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-aitu_gaming_hub}
       - REDIS_URL=redis://redis:6379/0
       - HOST=0.0.0.0
-      - PORT=8000
+      - PORT=5000
     ports:
-      - "8000:8000"
+      - "5000:5000"
+      - "8000:5000"
     dns:
       - 10.1.11.20
       - 195.189.68.1

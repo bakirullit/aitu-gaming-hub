@@ -337,3 +337,80 @@ async def import_staff_text(
     Imports participants table from raw copy-pasted text (TSV or CSV).
     """
     return await parse_and_import_staff_records(payload.raw_text, session, user_service)
+
+
+# =========================================================================
+# Mystery Box & Staff Gamification Oversight
+# =========================================================================
+
+@staff_admin_router.get("/lootbox/overview")
+async def get_staff_lootbox_overview(
+    session: AsyncSession = Depends(get_db_session),
+    admin: User = Depends(get_current_admin),
+) -> dict[str, Any]:
+    stmt = (
+        select(User)
+        .where(User.staff_role != StaffRole.NONE)
+        .order_by(User.role_revealed_at.desc().nullslast(), User.telegram_id.desc())
+    )
+    staff_users = (await session.execute(stmt)).scalars().all()
+
+    revealed = [u for u in staff_users if u.is_role_revealed]
+    sealed = [u for u in staff_users if not u.is_role_revealed]
+
+    items = []
+    for u in staff_users:
+        items.append({
+            "telegram_id": u.telegram_id,
+            "full_name": f"{u.first_name or ''} {u.last_name or ''}".strip() or str(u.telegram_id),
+            "username": u.username,
+            "barcode": u.barcode,
+            "academic_group": u.academic_group,
+            "staff_role": u.staff_role.value if hasattr(u.staff_role, "value") else str(u.staff_role),
+            "discipline_id": u.discipline_id,
+            "is_role_revealed": u.is_role_revealed,
+            "role_revealed_at": u.role_revealed_at.isoformat() if u.role_revealed_at else None,
+        })
+
+    return {
+        "total_staff": len(staff_users),
+        "revealed_count": len(revealed),
+        "sealed_count": len(sealed),
+        "items": items,
+    }
+
+
+@staff_admin_router.post("/lootbox/reseal/{user_id}")
+async def reseal_staff_lootbox(
+    user_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    admin: User = Depends(get_current_admin),
+) -> dict[str, Any]:
+    stmt = select(User).where(User.telegram_id == user_id)
+    user = (await session.execute(stmt)).scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.is_role_revealed = False
+    user.role_revealed_at = None
+    await session.commit()
+    return {"status": "ok", "user_id": user.telegram_id, "is_role_revealed": False}
+
+
+@staff_admin_router.post("/lootbox/reveal/{user_id}")
+async def force_reveal_staff_lootbox(
+    user_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    admin: User = Depends(get_current_admin),
+) -> dict[str, Any]:
+    stmt = select(User).where(User.telegram_id == user_id)
+    user = (await session.execute(stmt)).scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    from datetime import datetime, timezone
+    user.is_role_revealed = True
+    user.role_revealed_at = datetime.now(timezone.utc)
+    await session.commit()
+    return {"status": "ok", "user_id": user.telegram_id, "is_role_revealed": True}
+

@@ -8,6 +8,16 @@ import Login from '../views/Login.vue'
 import Tournaments from '../views/Tournaments.vue'
 import TournamentHub from '../views/TournamentHub.vue'
 import Lootbox from '../views/Lootbox.vue'
+import Dashboard from '../views/Dashboard.vue'
+import AdminTournaments from '../views/AdminTournaments.vue'
+import Helpdesk from '../views/Helpdesk.vue'
+import Minecraft from '../views/Minecraft.vue'
+import Broadcast from '../views/Broadcast.vue'
+import AdminLootbox from '../views/AdminLootbox.vue'
+import Logs from '../views/Logs.vue'
+import Settings from '../views/Settings.vue'
+
+import AdminLayout from '../layouts/AdminLayout.vue'
 
 const routes = [
   { path: '/', redirect: '/tournaments' },
@@ -17,22 +27,26 @@ const routes = [
   { path: '/tournaments/open-sunday-cs2', component: TournamentHub },
   { path: '/tournaments/hub', component: TournamentHub },
   { path: '/lootbox', component: Lootbox },
-  { path: '/admin/tournaments', component: Tournaments },
   { path: '/login', component: Login },
+  
+  // Admin Routes with Left Sidebar Layout
   { 
     path: '/admin', 
-    component: Admin,
-    meta: { requiresAuth: true }
-  },
-  { 
-    path: '/admin/disciplines', 
-    component: Disciplines,
-    meta: { requiresAuth: true }
-  },
-  { 
-    path: '/admin/chats', 
-    component: Chats,
-    meta: { requiresAuth: true }
+    component: AdminLayout,
+    meta: { requiresAuth: true },
+    children: [
+      { path: '', component: Admin },
+      { path: 'dashboard', component: Dashboard },
+      { path: 'tournaments', component: AdminTournaments },
+      { path: 'disciplines', component: Disciplines },
+      { path: 'helpdesk', component: Helpdesk },
+      { path: 'minecraft', component: Minecraft },
+      { path: 'chats', component: Chats },
+      { path: 'broadcast', component: Broadcast },
+      { path: 'lootbox', component: AdminLootbox },
+      { path: 'logs', component: Logs },
+      { path: 'settings', component: Settings },
+    ]
   },
 ]
 

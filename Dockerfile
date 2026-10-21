@@ -46,11 +46,11 @@ COPY update_admin.py .
 COPY --from=frontend-builder /app/frontend/dist ./web/app/dist
 
 # Expose FastAPI & Ingress port
-EXPOSE 8000
+EXPOSE 5000
 
 # Healthcheck for container orchestration
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/healthz || exit 1
+    CMD curl -f http://localhost:5000/healthz || exit 1
 
 # Entrypoint runs migrations and launches the application
 CMD ["sh", "-c", "alembic upgrade head && python main.py"]

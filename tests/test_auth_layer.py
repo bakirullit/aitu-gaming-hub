@@ -132,22 +132,41 @@ def test_user_base_phone_validation_failures():
 
 
 def test_user_base_gmail_validation_failures():
-    # Non-gmail domain
+    # Invalid email format - missing domain
     with pytest.raises(ValidationError):
         UserBase(
             telegram_id=1,
             full_name="John Doe",
             phone_number="+77011234567",
-            gmail="user@astanait.edu.kz",
+            gmail="notanemail",
         )
-    # Subdomain spoofing
+    # Invalid email format - missing user
     with pytest.raises(ValidationError):
         UserBase(
             telegram_id=1,
             full_name="John Doe",
             phone_number="+77011234567",
-            gmail="user@gmail.com.phishing.org",
+            gmail="@domain.com",
         )
+
+
+def test_user_base_any_email_domain_allowed():
+    domains = [
+        "user@astanait.edu.kz",
+        "user@mail.ru",
+        "user@yandex.kz",
+        "user@gmail.com",
+        "user@custom-domain.org",
+        "student.aitu@domain.co.uk",
+    ]
+    for email in domains:
+        user = UserBase(
+            telegram_id=1,
+            full_name="John Doe",
+            phone_number="+77011234567",
+            gmail=email,
+        )
+        assert user.gmail == email.lower()
 
 
 def test_user_create_defaults():

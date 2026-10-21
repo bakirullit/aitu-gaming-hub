@@ -1,5 +1,5 @@
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -62,39 +62,52 @@ async def get_current_admin(
     return user
 
 
+security_optional = HTTPBearer(auto_error=False)
+
+
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security_optional),
+    x_telegram_init_data: str | None = Header(None, alias="X-Telegram-Init-Data"),
     session: AsyncSession = Depends(get_db_session),
 ) -> User:
-    """Dependency to validate JWT and return the authenticated user."""
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
-        telegram_id_str = payload.get("sub")
-        if telegram_id_str is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload",
-            )
-        telegram_id = int(telegram_id_str)
-    except (jwt.PyJWTError, ValueError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    """Dependency to validate JWT or Telegram WebApp initData and return the authenticated user."""
+    # 1. Check Bearer token
+    if credentials and credentials.credentials:
+        try:
+            payload = jwt.decode(credentials.credentials, settings.JWT_SECRET, algorithms=["HS256"])
+            telegram_id_str = payload.get("sub")
+            if telegram_id_str is not None:
+                telegram_id = int(telegram_id_str)
+                stmt = select(User).where(User.telegram_id == telegram_id)
+                result = await session.execute(stmt)
+                user = result.scalar_one_or_none()
+                if user is not None:
+                    return user
+        except (jwt.PyJWTError, ValueError):
+            pass
 
-    stmt = select(User).where(User.telegram_id == telegram_id)
-    result = await session.execute(stmt)
-    user = result.scalar_one_or_none()
+    # 2. Check Telegram WebApp initData
+    if x_telegram_init_data:
+        try:
+            from common.utils.telegram_auth import validate_telegram_init_data
+            parsed = validate_telegram_init_data(x_telegram_init_data, settings.BOT_TOKEN)
+            tg_user = parsed.get("user")
+            if tg_user and isinstance(tg_user, dict):
+                tg_id = tg_user.get("id")
+                if tg_id:
+                    stmt = select(User).where(User.telegram_id == int(tg_id))
+                    result = await session.execute(stmt)
+                    user = result.scalar_one_or_none()
+                    if user is not None:
+                        return user
+        except Exception:
+            pass
 
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
-
-    return user
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 async def get_redis():

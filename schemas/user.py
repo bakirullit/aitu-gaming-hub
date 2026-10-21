@@ -61,13 +61,7 @@ class UserBase(BaseModel):
     @field_validator("gmail")
     @classmethod
     def validate_gmail(cls, v: EmailStr) -> str:
-        email_str = str(v).strip().lower()
-        if not email_str.endswith("@gmail.com"):
-            raise ValueError("Email domain must be strictly @gmail.com")
-        user_part, domain_part = email_str.split("@", 1)
-        if not user_part or domain_part != "gmail.com":
-            raise ValueError("Email must be a valid address ending with @gmail.com")
-        return email_str
+        return str(v).strip().lower()
 
 
 class UserCreate(UserBase):

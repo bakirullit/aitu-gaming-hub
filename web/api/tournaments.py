@@ -1,9 +1,11 @@
 from datetime import date
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select, or_, func
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from web.api.dependencies import get_current_admin, get_db_session
 
 from common.config import settings
 from common.database.session import db_manager
@@ -19,11 +21,6 @@ from plugins.tournaments.screens import format_summary_label
 from core.lifespan import runtime
 
 tournaments_router = APIRouter(prefix="/tournaments", tags=["Public Tournaments"])
-
-
-async def get_db_session():
-    async with db_manager.session_factory() as session:
-        yield session
 
 
 def get_active_bot_username() -> str:
@@ -186,3 +183,244 @@ async def get_public_tournament(
         raise HTTPException(status_code=404, detail="Tournament not found")
 
     return serialize_tournament(booking, bot_username)
+
+
+# =========================================================================
+# Admin Tournament Management Router (/api/admin/tournaments)
+# =========================================================================
+
+tournaments_admin_router = APIRouter(prefix="/tournaments", tags=["Admin Tournaments"])
+
+
+class AdminTournamentCreateRequest(BaseModel):
+    title: str = Field(..., min_length=3, max_length=128)
+    discipline: str = Field(..., description="e.g. cs2, dota2, valorant, pubg_mobile, etc.")
+    booking_date: date
+    event_format: str = Field(default="online_single_elim_5x5")
+    rulebook_url: Optional[str] = Field(None, max_length=512)
+    status: Optional[str] = Field(default="approved")
+
+
+class AdminTournamentRejectRequest(BaseModel):
+    reason: Optional[str] = Field(default="Слот отклонен администрацией турниров", max_length=500)
+
+
+@tournaments_admin_router.get("")
+async def admin_list_tournaments(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    discipline_filter: Optional[str] = Query(None, alias="discipline"),
+    query: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    session: AsyncSession = Depends(get_db_session),
+    admin: User = Depends(get_current_admin),
+):
+    bot_username = get_active_bot_username()
+    stmt = (
+        select(TournamentBooking)
+        .options(selectinload(TournamentBooking.creator))
+    )
+
+    if status_filter and status_filter.lower() != "all":
+        norm = status_filter.lower().strip()
+        matched_status = next(
+            (ts for ts in TournamentStatus if ts.value.lower() == norm or ts.name.lower() == norm),
+            None,
+        )
+        if matched_status:
+            stmt = stmt.where(TournamentBooking.status == matched_status)
+
+    if discipline_filter and discipline_filter.lower() != "all":
+        disc_norm = discipline_filter.lower().strip()
+        matched_disc = next(
+            (dt for dt in DisciplineType if dt.value.lower() == disc_norm or dt.name.lower() == disc_norm),
+            None,
+        )
+        if matched_disc:
+            stmt = stmt.where(TournamentBooking.discipline == matched_disc)
+
+    if query:
+        pattern = f"%{query}%"
+        stmt = stmt.where(
+            or_(
+                TournamentBooking.title.ilike(pattern),
+                TournamentBooking.event_format.ilike(pattern),
+            )
+        )
+
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    total = (await session.execute(count_stmt)).scalar_one()
+
+    # Aggregate counts for admin dashboard pills
+    pending_count = (
+        await session.execute(
+            select(func.count(TournamentBooking.id)).where(TournamentBooking.status == TournamentStatus.PENDING)
+        )
+    ).scalar_one() or 0
+
+    approved_count = (
+        await session.execute(
+            select(func.count(TournamentBooking.id)).where(TournamentBooking.status == TournamentStatus.APPROVED)
+        )
+    ).scalar_one() or 0
+
+    rejected_count = (
+        await session.execute(
+            select(func.count(TournamentBooking.id)).where(
+                TournamentBooking.status.in_([TournamentStatus.REJECTED, TournamentStatus.CANCELLED])
+            )
+        )
+    ).scalar_one() or 0
+
+    stmt = stmt.order_by(TournamentBooking.booking_date.desc(), TournamentBooking.id.desc()).limit(limit).offset(offset)
+    bookings = (await session.execute(stmt)).scalars().all()
+
+    items = [serialize_tournament(b, bot_username) for b in bookings]
+
+    return {
+        "items": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "pending_count": pending_count,
+        "approved_count": approved_count,
+        "rejected_count": rejected_count,
+    }
+
+
+@tournaments_admin_router.post("")
+async def admin_create_tournament(
+    payload: AdminTournamentCreateRequest,
+    session: AsyncSession = Depends(get_db_session),
+    admin: User = Depends(get_current_admin),
+):
+    # Resolve discipline
+    disc_norm = payload.discipline.lower().strip()
+    matched_disc = next(
+        (dt for dt in DisciplineType if dt.value.lower() == disc_norm or dt.name.lower() == disc_norm),
+        DisciplineType.CS2,
+    )
+
+    status_norm = (payload.status or "approved").lower().strip()
+    matched_status = next(
+        (ts for ts in TournamentStatus if ts.value.lower() == status_norm or ts.name.lower() == status_norm),
+        TournamentStatus.APPROVED,
+    )
+
+    booking = TournamentBooking(
+        creator_id=admin.telegram_id,
+        discipline=matched_disc,
+        title=payload.title,
+        booking_date=payload.booking_date,
+        event_format=payload.event_format,
+        rulebook_url=payload.rulebook_url,
+        status=matched_status,
+    )
+    session.add(booking)
+    await session.commit()
+    await session.refresh(booking)
+
+    bot_username = get_active_bot_username()
+    return serialize_tournament(booking, bot_username)
+
+
+@tournaments_admin_router.post("/{tournament_id}/approve")
+async def admin_approve_tournament(
+    tournament_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    admin: User = Depends(get_current_admin),
+):
+    stmt = (
+        select(TournamentBooking)
+        .options(selectinload(TournamentBooking.creator))
+        .where(TournamentBooking.id == tournament_id)
+    )
+    booking = (await session.execute(stmt)).scalar_one_or_none()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Tournament booking not found")
+
+    # Race condition check
+    conflict_stmt = select(TournamentBooking).where(
+        TournamentBooking.booking_date == booking.booking_date,
+        TournamentBooking.discipline == booking.discipline,
+        TournamentBooking.status == TournamentStatus.APPROVED,
+        TournamentBooking.id != booking.id,
+    )
+    conflict = (await session.execute(conflict_stmt)).scalar_one_or_none()
+    if conflict:
+        raise HTTPException(
+            status_code=409,
+            detail=f"На дату {booking.booking_date} уже утвержден турнир '{conflict.title}' по {booking.discipline.value}",
+        )
+
+    booking.status = TournamentStatus.APPROVED
+    await session.commit()
+    await session.refresh(booking)
+
+    # Telegram notification
+    if runtime.bot and booking.creator_id:
+        try:
+            msg = (
+                f"🏆 <b>Турнир утвержден!</b>\n\n"
+                f"Ваш турнир <b>«{booking.title}»</b> на дату <code>{booking.booking_date}</code> успешно одобрен администратором!\n"
+                f"Он уже доступен в общем расписании на сайте клуба."
+            )
+            await runtime.bot.send_message(chat_id=booking.creator_id, text=msg)
+        except Exception as exc:
+            logger.warning(f"Failed to notify tournament creator {booking.creator_id}: {exc}")
+
+    bot_username = get_active_bot_username()
+    return serialize_tournament(booking, bot_username)
+
+
+@tournaments_admin_router.post("/{tournament_id}/reject")
+async def admin_reject_tournament(
+    tournament_id: int,
+    payload: AdminTournamentRejectRequest,
+    session: AsyncSession = Depends(get_db_session),
+    admin: User = Depends(get_current_admin),
+):
+    stmt = (
+        select(TournamentBooking)
+        .options(selectinload(TournamentBooking.creator))
+        .where(TournamentBooking.id == tournament_id)
+    )
+    booking = (await session.execute(stmt)).scalar_one_or_none()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Tournament booking not found")
+
+    booking.status = TournamentStatus.REJECTED
+    await session.commit()
+    await session.refresh(booking)
+
+    if runtime.bot and booking.creator_id:
+        try:
+            msg = (
+                f"❌ <b>Заявка на турнир отклонена</b>\n\n"
+                f"Турнир: <b>«{booking.title}»</b> ({booking.booking_date})\n"
+                f"Причина: <i>{payload.reason}</i>\n\n"
+                f"Вы можете выбрать другой свободный слот в боте."
+            )
+            await runtime.bot.send_message(chat_id=booking.creator_id, text=msg)
+        except Exception as exc:
+            logger.warning(f"Failed to notify tournament creator {booking.creator_id}: {exc}")
+
+    bot_username = get_active_bot_username()
+    return serialize_tournament(booking, bot_username)
+
+
+@tournaments_admin_router.delete("/{tournament_id}")
+async def admin_delete_tournament(
+    tournament_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    admin: User = Depends(get_current_admin),
+):
+    stmt = select(TournamentBooking).where(TournamentBooking.id == tournament_id)
+    booking = (await session.execute(stmt)).scalar_one_or_none()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+
+    await session.delete(booking)
+    await session.commit()
+    return {"status": "ok", "deleted_id": tournament_id}
+

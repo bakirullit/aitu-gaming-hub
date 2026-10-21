@@ -21,6 +21,7 @@ from plugins.auth.screens import (
     get_phone_screen,
     get_registration_cancelled_screen,
     get_staff_closed_screen,
+    get_staff_mystery_box_screen,
     get_steam_screen,
 )
 from plugins.auth.states import AuthStates
@@ -29,6 +30,9 @@ from services.steam_service import SteamService
 from services.user_service import UserService
 
 logger = logging.getLogger("plugins.auth.routers.onboarding")
+
+# ВРЕМЕННО: Отключение верификации почты (OTP)
+BYPASS_EMAIL_VERIFICATION = True
 
 
 def setup_onboarding_router(core: CoreContext) -> Router:
@@ -228,7 +232,7 @@ def setup_onboarding_router(core: CoreContext) -> Router:
     # =========================================================================
 
     @router.message(AuthStates.waiting_gmail)
-    async def process_gmail(message: Message, state: FSMContext) -> None:
+    async def process_gmail(message: Message, state: FSMContext, session: AsyncSession | None = None) -> None:
         user_id = message.from_user.id
         chat_id = message.chat.id
         data = await state.get_data()
@@ -238,21 +242,41 @@ def setup_onboarding_router(core: CoreContext) -> Router:
 
         email_str = (message.text or "").strip().lower()
 
-        # Strict @gmail.com validation
-        if not re.fullmatch(r"^[a-zA-Z0-9_.+-]+@gmail\.com$", email_str):
+        # Email validation (accepts any email domain)
+        if not re.fullmatch(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$", email_str):
             screen = get_gmail_screen(full_name=full_name, phone=phone)
             err_screen = screen.__class__(
                 text=(
-                    f"❌ <b>Некорректная почта Google!</b>\n\n"
+                    f"❌ <b>Некорректный адрес электронной почты!</b>\n\n"
                     f"ФИО: <b>{full_name}</b> ✅\n\n"
                     f"Телефон: <code>{phone}</code> ✅\n\n"
-                    "Пожалуйста, введите личную почту Google (домен строго <code>@gmail.com</code>):\n"
-                    "<i>Пример: student@gmail.com</i>"
+                    "Пожалуйста, введите корректный адрес электронной почты:\n"
+                    "<i>Пример: student@astanait.edu.kz или user@gmail.com</i>"
                 ),
                 reply_markup=screen.reply_markup,
             )
             await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
             return
+
+        # Check email uniqueness in DB
+        if session is not None:
+            stmt = select(User).where(
+                or_(User.email == email_str, User.gmail == email_str),
+                User.telegram_id != user_id,
+            )
+            existing_user = (await session.execute(stmt)).scalar_one_or_none()
+            if existing_user:
+                screen = get_gmail_screen(full_name=full_name, phone=phone)
+                err_screen = screen.__class__(
+                    text=(
+                        f"❌ <b>Почта уже зарегистрирована!</b>\n\n"
+                        f"Адрес <code>{email_str}</code> уже привязан к другому аккаунту.\n"
+                        "Пожалуйста, укажите другую почту или обратитесь в саппорт."
+                    ),
+                    reply_markup=screen.reply_markup,
+                )
+                await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
+                return
 
         await state.update_data(gmail=email_str)
 
@@ -331,6 +355,74 @@ def setup_onboarding_router(core: CoreContext) -> Router:
             await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
             return
 
+        # =====================================================================
+        # Если верификация почты отключена: сразу регистрируем студента!
+        # =====================================================================
+        if BYPASS_EMAIL_VERIFICATION:
+            phone = data.get("phone", "")
+            gmail = data.get("gmail") or f"{barcode}@astanait.edu.kz"
+
+            parts = full_name.split(maxsplit=1)
+            first_name = parts[0] if parts else ""
+            last_name = parts[1] if len(parts) > 1 else ""
+
+            stmt_user = select(User).where(User.telegram_id == user_id)
+            user = (await session.execute(stmt_user)).scalar_one_or_none()
+
+            if user:
+                user.full_name = full_name
+                user.first_name = first_name
+                user.last_name = last_name
+                user.phone_number = phone or user.phone_number
+                user.email = gmail
+                user.barcode = barcode
+                user.role = "student"
+                user.is_verified = True
+            else:
+                user = User(
+                    telegram_id=user_id,
+                    username=message.from_user.username,
+                    full_name=full_name,
+                    first_name=first_name,
+                    last_name=last_name,
+                    phone_number=phone,
+                    email=gmail,
+                    barcode=barcode,
+                    role="student",
+                    is_verified=True,
+                )
+                session.add(user)
+
+            await session.commit()
+            await session.refresh(user)
+
+            # Claim pending staff role if pre-created by admin
+            claimed = await UserService(session).claim_pending_role_if_exists(user)
+            await state.clear()
+
+            staff_role_norm = str(getattr(user, "staff_role", "") or "").lower().replace("staffrole.", "")
+            if claimed or (staff_role_norm and staff_role_norm != "none" and not getattr(user, "is_role_revealed", False)):
+                screen = get_staff_mystery_box_screen(user)
+                await core.navigator.render(
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    screen=screen,
+                    screen_id="mystery_box",
+                    push_to_history=True,
+                )
+                return
+
+            # Render Main Authorized Menu
+            screen = get_user_home_screen(user)
+            await core.navigator.render(
+                user_id=user_id,
+                chat_id=chat_id,
+                screen=screen,
+                screen_id="home",
+                push_to_history=True,
+            )
+            return
+
         # Dispatch OTP via AuthService
         auth_service = AuthService(session=session, redis=core.redis, settings_obj=core.settings)
         try:
@@ -398,32 +490,33 @@ def setup_onboarding_router(core: CoreContext) -> Router:
         phone = data.get("phone", "")
         gmail = data.get("gmail", "")
 
-        auth_service = AuthService(session=session, redis=core.redis, settings_obj=core.settings)
-        try:
-            await auth_service.verify_student_otp(telegram_id=user_id, barcode=barcode, otp_code=otp_code)
-        except HTTPException as exc:
-            if exc.status_code == 403:
-                # 3 failed attempts: reset state
-                await state.clear()
-                screen = get_registration_cancelled_screen()
-                await core.navigator.render(
-                    user_id=user_id,
-                    chat_id=chat_id,
-                    screen=screen,
-                    screen_id="reg_cancelled",
-                    push_to_history=False,
-                )
-                return
-            else:
-                target_email = gmail if not core.settings.is_production else None
-                screen = get_otp_screen(barcode=barcode, target_email=target_email)
-                detail = exc.detail if isinstance(exc.detail, str) else "Неверный код"
-                err_screen = screen.__class__(
-                    text=f"❌ <b>{detail}</b>\n\nПопробуйте ввести код еще раз:",
-                    reply_markup=screen.reply_markup,
-                )
-                await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
-                return
+        if not BYPASS_EMAIL_VERIFICATION:
+            auth_service = AuthService(session=session, redis=core.redis, settings_obj=core.settings)
+            try:
+                await auth_service.verify_student_otp(telegram_id=user_id, barcode=barcode, otp_code=otp_code)
+            except HTTPException as exc:
+                if exc.status_code == 403:
+                    # 3 failed attempts: reset state
+                    await state.clear()
+                    screen = get_registration_cancelled_screen()
+                    await core.navigator.render(
+                        user_id=user_id,
+                        chat_id=chat_id,
+                        screen=screen,
+                        screen_id="reg_cancelled",
+                        push_to_history=False,
+                    )
+                    return
+                else:
+                    target_email = gmail if not core.settings.is_production else None
+                    screen = get_otp_screen(barcode=barcode, target_email=target_email)
+                    detail = exc.detail if isinstance(exc.detail, str) else "Неверный код"
+                    err_screen = screen.__class__(
+                        text=f"❌ <b>{detail}</b>\n\nПопробуйте ввести код еще раз:",
+                        reply_markup=screen.reply_markup,
+                    )
+                    await core.navigator.render(user_id=user_id, chat_id=chat_id, screen=err_screen, push_to_history=False)
+                    return
 
         # Success: Write student to DB
         parts = full_name.split(maxsplit=1)
@@ -461,9 +554,20 @@ def setup_onboarding_router(core: CoreContext) -> Router:
         await session.refresh(user)
 
         # Claim pending staff role if pre-created by admin
-        await UserService(session).claim_pending_role_if_exists(user)
-
+        claimed = await UserService(session).claim_pending_role_if_exists(user)
         await state.clear()
+
+        staff_role_norm = str(getattr(user, "staff_role", "") or "").lower().replace("staffrole.", "")
+        if claimed or (staff_role_norm and staff_role_norm != "none" and not getattr(user, "is_role_revealed", False)):
+            screen = get_staff_mystery_box_screen(user)
+            await core.navigator.render(
+                user_id=user_id,
+                chat_id=chat_id,
+                screen=screen,
+                screen_id="mystery_box",
+                push_to_history=True,
+            )
+            return
 
         # Render Main Authorized Menu
         screen = get_user_home_screen(user)
@@ -521,9 +625,21 @@ def setup_onboarding_router(core: CoreContext) -> Router:
         await session.refresh(user)
 
         # Claim pending staff role if pre-created by admin
-        await UserService(session).claim_pending_role_if_exists(user)
-
+        claimed = await UserService(session).claim_pending_role_if_exists(user)
         await state.clear()
+
+        staff_role_norm = str(getattr(user, "staff_role", "") or "").lower().replace("staffrole.", "")
+        if claimed or (staff_role_norm and staff_role_norm != "none" and not getattr(user, "is_role_revealed", False)):
+            screen = get_staff_mystery_box_screen(user)
+            await core.navigator.render(
+                user_id=user_id,
+                chat_id=chat_id,
+                screen=screen,
+                screen_id="mystery_box",
+                push_to_history=True,
+            )
+            await callback.answer()
+            return
 
         screen = get_user_home_screen(user)
         await core.navigator.render(
